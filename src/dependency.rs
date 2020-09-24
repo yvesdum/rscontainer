@@ -30,6 +30,9 @@ pub trait IResolve {
 
 /// A generalized smart pointer to a singleton that is resolved from the service
 /// container.
+///
+/// To read from a singleton, use the `read()` method. To mutate a singleton,
+/// use the `write()` method.
 #[derive(Debug)]
 pub struct Singleton<T>
 where
@@ -93,6 +96,9 @@ where
 ///////////////////////////////////////////////////////////////////////////////
 
 /// An instance of a service that is resolved from the service container.
+///
+/// Instance implements `Deref` and `DerefMut` to be able to read and mutate
+/// the service.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Instance<T>
 where
