@@ -4,20 +4,23 @@
 //!
 //! * Automatic construction of objects which depend on other objects
 //! * Dependency Injection
-//! * Inversion Of Control
+//! * Inversion Of Control through trait objects
 //! * Storage and management of Singletons
 //! * Compatible with multiple smart pointer types, locking mechanisms and
 //!   interiour mutability mechanisms.
+//! * No setup step required to resolve static services, only for trait
+//!   objects.
+//! * Works with any existing type without writing complicated wrapper types.
 //!
 //! # Using the Service Container with static services
 //!
 //! **Singletons** are instances which are shared throughout your application.
-//! Each time you resolve a singleton, you will get the same instance. A 
+//! Each time you resolve a singleton, you will get the same instance. A
 //! singleton is always behind a shared smart pointer, such as `Arc` or `Rc`,
-//!  and may have an access mechanism such as `RefCell` or `Mutex`. Each 
+//!  and may have an access mechanism such as `RefCell` or `Mutex`. Each
 //! service decides for themselve which kind of pointer and mechanism they use.
-//! The first time you ask for an instance of a certain singleton, the 
-//! container constructs it and recursively constructs and injects the 
+//! The first time you ask for an instance of a certain singleton, the
+//! container constructs it and recursively constructs and injects the
 //! neccessary dependencies. The instance is than stored in the container.
 //!
 //! To read from or mutate a singleton, you use the `read()` and `write()`
@@ -36,12 +39,12 @@
 //! ```
 //!
 //! **Instances** are instances which are different each time you resolve them
-//! from the container. They are not behind a pointer and access mechanism. 
-//! The container will still take care of injecting the neccessary 
+//! from the container. They are not behind a pointer and access mechanism.
+//! The container will still take care of injecting the neccessary
 //! dependencies.
 //!
 //! Because instances are not behind a pointer, you don't need `read()` or
-//! `write()` to interact with them. Instances implement `Deref` and 
+//! `write()` to interact with them. Instances implement `Deref` and
 //! `DerefMut` instead.
 //!
 //! ```
@@ -51,7 +54,7 @@
 //! let instance: Instance<MyService> = container.resolve();
 //! ```
 //!
-//! `Singleton<T>` and `Instance<T>` do not carry a lifetime parameter, 
+//! `Singleton<T>` and `Instance<T>` do not carry a lifetime parameter,
 //! therefore they can be stored in structs and enums very easily.
 //!
 //! # Creating a service
@@ -61,21 +64,17 @@
 //! for more information.
 //!
 //! If your service depends on other services, you need to store these services
-//! as fields in your struct as `Singleton<T>` or `Instance<T>`. 
+//! as fields in your struct as `Singleton<T>` or `Instance<T>`.
 
 mod dependency;
-mod errors;
 mod pointer;
-mod read_write;
 mod service;
 
 pub use crate::dependency::{DynInstance, DynSingleton, Instance, Singleton};
-// pub use crate::errors::{MakeError, ReadError, WriteError};
-// pub use crate::read_write::{ReadService, WriteService};
 pub use crate::service::{IDynService, IService};
 
 use crate::dependency::IResolve;
-use crate::pointer::ServicePointer;
+use crate::pointer::{IPointer, ServicePointer};
 use log::trace;
 use std::any::type_name;
 use std::any::TypeId;
@@ -94,6 +93,10 @@ pub struct ServiceContainer {
 }
 
 impl ServiceContainer {
+    //////////////////////////////////////////////////////////////////////////
+    // Constructors
+    //////////////////////////////////////////////////////////////////////////
+
     /// Creates a new, empty service container.
     pub fn new() -> Self {
         Self {
@@ -109,6 +112,10 @@ impl ServiceContainer {
             dyn_singletons: HashMap::with_capacity(dyn_singletons),
         }
     }
+
+    //////////////////////////////////////////////////////////////////////////
+    // Resolve Methods
+    //////////////////////////////////////////////////////////////////////////
 
     /// Resolve an object from the service container.
     ///
@@ -155,6 +162,7 @@ impl ServiceContainer {
         Instance { instance }
     }
 
+    /// TODO
     pub fn resolve_dyn_singleton<T>(&mut self) -> DynSingleton<T>
     where
         T: ?Sized + IDynService + 'static,
@@ -171,13 +179,94 @@ impl ServiceContainer {
         );
     }
 
+    /// TODO
     pub fn resolve_dyn_instance<T>(&mut self) -> DynInstance<T>
     where
-        T: ?Sized + IDynService,
+        T: ?Sized + IDynService + 'static,
     {
+        let key = TypeId::of::<T>();
+
+        if let Some(_service) = self.dyn_singletons.get(&key) {
+            unimplemented!()
+        }
+
         panic!(
             "Resolve error: no implementor defined for dyn instance {}",
             type_name::<T>()
         );
+    }
+
+    //////////////////////////////////////////////////////////////////////////
+    // Meta Data Getters
+    //////////////////////////////////////////////////////////////////////////
+
+    /// Returns the number of static singletons that are currently residing in
+    /// the service container.
+    pub fn num_singletons(&self) -> usize {
+        self.singletons.len()
+    }
+
+    /// Returns the number of dynamic service implementations that are
+    /// registered to this service container.
+    pub fn num_dyn_services(&self) -> usize {
+        self.dyn_singletons.len()
+    }
+
+    /// Returns true if an instance of the supplied TypeId is currently
+    /// residing in the container as a singleton.
+    pub fn constains_type(&self, key: TypeId) -> bool {
+        self.singletons.contains_key(&key)
+    }
+
+    /// Returns true if an implementation for the supplied dynamic service
+    /// is registered to this service container.
+    pub fn constains_dyn_type(&self, key: TypeId) -> bool {
+        self.dyn_singletons.contains_key(&key)
+    }
+
+    /// Returns true if an instance of the supplied singleton is currently
+    /// residing in the container.
+    pub fn contains<T>(&self) -> bool
+    where
+        T: IService + 'static,
+    {
+        let key = TypeId::of::<T>();
+        self.constains_type(key)
+    }
+
+    /// Returns true if an implementation for the supplied dynamic service
+    /// is registered to this service container.
+    pub fn contains_dyn<T>(&self) -> bool
+    where
+        T: ?Sized + IDynService + 'static,
+    {
+        let key = TypeId::of::<T>();
+        self.constains_dyn_type(key)
+    }
+
+    //////////////////////////////////////////////////////////////////////////
+    // Modifiers
+    //////////////////////////////////////////////////////////////////////////
+
+    /// Removes a singleton from the container.
+    ///
+    /// This does not invalidate any previously resolved instances of the
+    /// singleton.
+    ///
+    /// If the singleton existed, it is returned. Otherwise `None` is returned.
+    pub fn remove<T>(&mut self) -> Option<Singleton<T>>
+    where
+        T: IService + 'static,
+    {
+        let key = TypeId::of::<T>();
+        if let Some(service) = self.singletons.remove(&key) {
+            // We can guarantee that the raw pointer behind this key has the
+            // same type as `T`. Since we take the smart pointer out of the
+            // arena, we don't need to clone it.
+            let pointer = unsafe { T::Pointer::from_type_erased_raw(service.ptr) };
+            Some(Singleton { pointer })
+        } else {
+            None
+        }
     }
 }

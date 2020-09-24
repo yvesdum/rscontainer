@@ -169,7 +169,7 @@ where
 
 impl<T> IResolve for DynInstance<T>
 where
-    T: ?Sized + IDynService,
+    T: ?Sized + IDynService + 'static,
 {
     fn resolve(ctn: &mut ServiceContainer) -> Self {
         ctn.resolve_dyn_instance()
