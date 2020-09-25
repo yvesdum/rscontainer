@@ -66,15 +66,16 @@
 //! If your service depends on other services, you need to store these services
 //! as fields in your struct as `Singleton<T>` or `Instance<T>`.
 
-mod dependency;
-mod pointer;
-mod service;
+pub mod dyn_services;
+mod helpers;
+pub mod static_services;
 
-pub use crate::dependency::{DynInstance, DynSingleton, Instance, Singleton};
-pub use crate::service::{IDynService, IService};
-
-use crate::dependency::IResolve;
-use crate::pointer::{IPointer, ServicePointer};
+use crate::dyn_services::getters::{DynInstance, DynSingleton};
+use crate::dyn_services::service_traits::{IDynImpl, IDynService};
+use crate::helpers::IResolve;
+use crate::static_services::getters::{Instance, Singleton};
+use crate::static_services::pointers::{IPointer, ServicePointer};
+use crate::static_services::service_traits::IService;
 use log::trace;
 use std::any::type_name;
 use std::any::TypeId;
@@ -89,7 +90,7 @@ use std::collections::HashMap;
 /// Manages dependencies between these services.
 pub struct ServiceContainer {
     singletons: HashMap<TypeId, ServicePointer>,
-    dyn_singletons: HashMap<TypeId, ServicePointer>,
+    dyn_singletons: HashMap<TypeId, ()>,
 }
 
 impl ServiceContainer {

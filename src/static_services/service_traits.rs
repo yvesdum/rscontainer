@@ -1,6 +1,6 @@
 //! The traits to be implemented on foreign types by users of this crate.
 
-use crate::pointer::IPointer;
+use crate::static_services::pointers::IPointer;
 use crate::ServiceContainer;
 
 /// An object that can be constructed through the service container.
@@ -105,16 +105,4 @@ pub trait IService {
 
     /// Creates a singleton instance of this service.
     fn construct_singleton(ctn: &mut ServiceContainer) -> Self::Pointer;
-}
-
-/// A trait object that can be used as a dynamic service.
-///
-/// Implement this on the trait object itself with
-/// `impl IDynService for dyn X {}`.
-pub trait IDynService {
-    /// A ref counted smart pointer to this trait object.
-    type Pointer: IPointer + Clone;
-
-    /// A boxed instance of this trait object.
-    type Instance;
 }

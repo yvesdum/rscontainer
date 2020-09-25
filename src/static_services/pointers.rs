@@ -1,6 +1,6 @@
 //! Traits to enable smart pointers to work with the container.
 
-use crate::service::IService;
+use crate::static_services::service_traits::IService;
 use std::cell::{RefCell, Ref, RefMut};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};

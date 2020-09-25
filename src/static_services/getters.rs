@@ -10,19 +10,11 @@
 //! * Can be cloned, so it can be pushed to other objects.
 //! * Can be send across threads if the service is `Send` and `Sync`.
 
-use crate::pointer::{IReadPointer, IWritePointer};
-use crate::service::{IService, IDynService};
+use crate::static_services::pointers::{IReadPointer, IWritePointer};
+use crate::static_services::service_traits::IService;
+use crate::helpers::IResolve;
 use crate::ServiceContainer;
 use std::ops::{Deref, DerefMut};
-
-///////////////////////////////////////////////////////////////////////////////
-// Internal Helper Traits
-///////////////////////////////////////////////////////////////////////////////
-
-/// Used for the `resolve()` method of the `ServiceContainer`.
-pub trait IResolve {
-    fn resolve(ctn: &mut ServiceContainer) -> Self;
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Concrete Singleton
@@ -133,45 +125,5 @@ where
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.instance
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// Dynamic Dependency Objects
-///////////////////////////////////////////////////////////////////////////////
-
-/// A generalized smart pointer to a singleton trait object that is resolved
-/// from the service container.
-pub struct DynSingleton<T>
-where
-    T: ?Sized + IDynService,
-{
-    _pointer: T::Pointer,
-}
-
-impl<T> IResolve for DynSingleton<T>
-where
-    T: ?Sized + IDynService + 'static,
-{
-    fn resolve(ctn: &mut ServiceContainer) -> Self {
-        ctn.resolve_dyn_singleton()
-    }
-}
-
-/// An instance of a service trait object that is resolved through the service
-/// container.
-pub struct DynInstance<T>
-where
-    T: ?Sized + IDynService,
-{
-    _pointer: T::Instance,
-}
-
-impl<T> IResolve for DynInstance<T>
-where
-    T: ?Sized + IDynService + 'static,
-{
-    fn resolve(ctn: &mut ServiceContainer) -> Self {
-        ctn.resolve_dyn_instance()
     }
 }

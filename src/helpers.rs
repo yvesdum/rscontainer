@@ -1,0 +1,12 @@
+//! Types for internal functionality.
+
+use crate::ServiceContainer;
+
+///////////////////////////////////////////////////////////////////////////////
+// Internal Helper Traits
+///////////////////////////////////////////////////////////////////////////////
+
+/// Used for the `resolve()` method of the `ServiceContainer`.
+pub trait IResolve {
+    fn resolve(ctn: &mut ServiceContainer) -> Self;
+}
