@@ -4,12 +4,10 @@
 //!
 //! * Automatic construction of objects which depend on other objects
 //! * Dependency Injection
-//! * Inversion Of Control through trait objects
 //! * Storage and management of Singletons
 //! * Compatible with multiple smart pointer types, locking mechanisms and
 //!   interiour mutability mechanisms.
-//! * No setup step required to resolve static services, only for trait
-//!   objects.
+//! * No setup step required
 //! * Works with any existing type without writing complicated wrapper types.
 //!
 //! # Using the Service Container with static services
@@ -66,16 +64,14 @@
 //! If your service depends on other services, you need to store these services
 //! as fields in your struct as `Singleton<T>` or `Instance<T>`.
 
-pub mod dyn_services;
 mod helpers;
-pub mod static_services;
+mod static_services;
 
-use crate::dyn_services::getters::{DynInstance, DynSingleton};
-use crate::dyn_services::service_traits::{IDynImpl, IDynService};
+pub use crate::static_services::getters::{Instance, Singleton};
+pub use crate::static_services::service_traits::IService;
+
 use crate::helpers::IResolve;
-use crate::static_services::getters::{Instance, Singleton};
 use crate::static_services::pointers::{IPointer, ServicePointer};
-use crate::static_services::service_traits::IService;
 use log::trace;
 use std::any::type_name;
 use std::any::TypeId;
@@ -89,8 +85,7 @@ use std::collections::HashMap;
 ///
 /// Manages dependencies between these services.
 pub struct ServiceContainer {
-    singletons: HashMap<TypeId, ServicePointer>,
-    dyn_singletons: HashMap<TypeId, ()>,
+    singletons: HashMap<TypeId, ServicePointer>
 }
 
 impl ServiceContainer {
@@ -101,16 +96,14 @@ impl ServiceContainer {
     /// Creates a new, empty service container.
     pub fn new() -> Self {
         Self {
-            singletons: HashMap::new(),
-            dyn_singletons: HashMap::new(),
+            singletons: HashMap::new()
         }
     }
 
     /// Creates a new service container with the specified reserved capacity.
-    pub fn with_capacity(singletons: usize, dyn_singletons: usize) -> Self {
+    pub fn with_capacity(singletons: usize) -> Self {
         Self {
-            singletons: HashMap::with_capacity(singletons),
-            dyn_singletons: HashMap::with_capacity(dyn_singletons),
+            singletons: HashMap::with_capacity(singletons)
         }
     }
 
@@ -163,40 +156,6 @@ impl ServiceContainer {
         Instance { instance }
     }
 
-    /// TODO
-    pub fn resolve_dyn_singleton<T>(&mut self) -> DynSingleton<T>
-    where
-        T: ?Sized + IDynService + 'static,
-    {
-        let key = TypeId::of::<T>();
-
-        if let Some(_service) = self.dyn_singletons.get(&key) {
-            unimplemented!()
-        }
-
-        panic!(
-            "Resolve error: no implementor defined for dyn singleton {}",
-            type_name::<T>()
-        );
-    }
-
-    /// TODO
-    pub fn resolve_dyn_instance<T>(&mut self) -> DynInstance<T>
-    where
-        T: ?Sized + IDynService + 'static,
-    {
-        let key = TypeId::of::<T>();
-
-        if let Some(_service) = self.dyn_singletons.get(&key) {
-            unimplemented!()
-        }
-
-        panic!(
-            "Resolve error: no implementor defined for dyn instance {}",
-            type_name::<T>()
-        );
-    }
-
     //////////////////////////////////////////////////////////////////////////
     // Meta Data Getters
     //////////////////////////////////////////////////////////////////////////
@@ -207,22 +166,10 @@ impl ServiceContainer {
         self.singletons.len()
     }
 
-    /// Returns the number of dynamic service implementations that are
-    /// registered to this service container.
-    pub fn num_dyn_services(&self) -> usize {
-        self.dyn_singletons.len()
-    }
-
     /// Returns true if an instance of the supplied TypeId is currently
     /// residing in the container as a singleton.
     pub fn constains_type(&self, key: TypeId) -> bool {
         self.singletons.contains_key(&key)
-    }
-
-    /// Returns true if an implementation for the supplied dynamic service
-    /// is registered to this service container.
-    pub fn constains_dyn_type(&self, key: TypeId) -> bool {
-        self.dyn_singletons.contains_key(&key)
     }
 
     /// Returns true if an instance of the supplied singleton is currently
@@ -233,16 +180,6 @@ impl ServiceContainer {
     {
         let key = TypeId::of::<T>();
         self.constains_type(key)
-    }
-
-    /// Returns true if an implementation for the supplied dynamic service
-    /// is registered to this service container.
-    pub fn contains_dyn<T>(&self) -> bool
-    where
-        T: ?Sized + IDynService + 'static,
-    {
-        let key = TypeId::of::<T>();
-        self.constains_dyn_type(key)
     }
 
     //////////////////////////////////////////////////////////////////////////
