@@ -191,9 +191,13 @@ impl ServiceContainer {
 
         // Check if we have a saved instance and return it.
         if let Some(singleton) = self.singletons.get(&key) {
+            // We are sure that the raw pointer is `T`, because we saved the
+            // type id in the key. We clone the smart pointer and forget the 
+            // original one to increase the reference count.
             let raw_ptr = singleton.ptr.as_ptr();
             let smart_ptr = unsafe { T::Pointer::from_type_erased_raw(raw_ptr) };
             let pointer = smart_ptr.clone();
+            std::mem::forget(smart_ptr);
             return Singleton { pointer };
         }
 
@@ -303,6 +307,9 @@ impl ServiceContainer {
     {
         let key = TypeId::of::<T>();
         if let Some(singleton) = self.singletons.remove(&key) {
+            // We are sure that the raw pointer is `T`, because we saved the
+            // type id in the key. Here we don't clone the smart pointer but
+            // return the original one.
             let raw_ptr = singleton.ptr.as_ptr();
             let pointer = unsafe { T::Pointer::from_type_erased_raw(raw_ptr) };
             Some(Singleton { pointer })
