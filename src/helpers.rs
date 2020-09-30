@@ -29,6 +29,6 @@ impl Drop for SingletonPtr {
 
 /// Custom constructors for a service.
 pub(crate) struct Constructors {
-    pub singleton: Option<Constructor<()>>,
-    pub instance: Option<Constructor<()>>
+    pub singleton: Constructor<()>,
+    pub instance: Constructor<()>
 }

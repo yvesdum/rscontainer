@@ -203,20 +203,15 @@ impl ServiceContainer {
 
         // If there's no saved instance, check if there is
         // a custom constructor registered.
-        let ctor = if let Some(ctors) = &self.constructors {
-            if let Some(ctors) = ctors.get(&key) {
-                ctors.singleton
-            } else {
-                None
-            }
-        } else {
-            None
+        let ctors = match &self.constructors {
+            Some(ctors) => ctors.get(&key),
+            None => None
         };
 
         // If there is a custom constructor, call it. If there is none,
         // call the default constructor.
-        let pointer = if let Some(ctor) = ctor {
-            let ctor: Constructor<T::Pointer> = unsafe { std::mem::transmute(ctor) };
+        let pointer = if let Some(ctors) = ctors {
+            let ctor: Constructor<T::Pointer> = unsafe { std::mem::transmute(ctors.singleton) };
             ctor(self)
         } else {
             T::construct_singleton(self)
@@ -243,20 +238,15 @@ impl ServiceContainer {
         let key = TypeId::of::<T>();
 
         // Check if there's a custom constructor registered.
-        let ctor = if let Some(ctors) = &self.constructors {
-            if let Some(ctors) = ctors.get(&key) {
-                ctors.instance
-            } else {
-                None
-            }
-        } else {
-            None
+        let ctors = match &self.constructors {
+            Some(ctors) => ctors.get(&key),
+            None => None
         };
 
         // If there is a custom constructor, call it. If there is none,
         // call the default constructor.
-        let instance = if let Some(ctor) = ctor {
-            let ctor: Constructor<T::Instance> = unsafe { std::mem::transmute(ctor) };
+        let instance = if let Some(ctors) = ctors {
+            let ctor: Constructor<T::Instance> = unsafe { std::mem::transmute(ctors.instance) };
             ctor(self)
         } else {
             T::construct(self)

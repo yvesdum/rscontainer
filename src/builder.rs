@@ -27,11 +27,11 @@ impl ContainerBuilder {
     /// Register a pair of custom constructors for a service.
     pub fn constructors<T: IService + 'static>(
         &mut self,
-        instance_ctor: Option<Constructor<T::Instance>>,
-        singleton_ctor: Option<Constructor<T::Pointer>>,
+        instance_ctor: Constructor<T::Instance>,
+        singleton_ctor: Constructor<T::Pointer>,
     ) -> &mut Self {
-        let instance: Option<Constructor<()>> = unsafe { std::mem::transmute(instance_ctor) };
-        let singleton: Option<Constructor<()>> = unsafe { std::mem::transmute(singleton_ctor) };
+        let instance: Constructor<()> = unsafe { std::mem::transmute(instance_ctor) };
+        let singleton: Constructor<()> = unsafe { std::mem::transmute(singleton_ctor) };
 
         let constructors = Constructors {
             instance,
