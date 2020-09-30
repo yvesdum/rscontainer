@@ -6,20 +6,18 @@ use crate::ServiceContainer;
 use std::any::TypeId;
 use std::collections::HashMap;
 
-/// Registration of custom constructors.
+/// Constructs a Service Container through the builder pattern.
 pub struct ContainerBuilder {
-    // We use a Vec to prevent extra hashes when inserting constructors and
-    // building the service container.
     ctors: Option<HashMap<TypeId, Constructors>>,
 }
 
 impl ContainerBuilder {
-    /// Creates a new empty constructor collection.
+    /// Creates a new service container builder.
     pub fn new() -> Self {
         Self { ctors: None }
     }
 
-    /// Creates a new constructor collection with the specified capacity.
+    /// Creates a new service container builder with the specified capacity.
     pub fn with_constructors_capacity(capacity: usize) -> Self {
         Self {
             ctors: Some(HashMap::with_capacity(capacity)),

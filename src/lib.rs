@@ -11,16 +11,48 @@
 //! * Works with any existing type without writing complicated wrapper types
 //! * Optional registration of custom constructors
 //!
+//! # Creating a Service Container
+//!
+//! To create a service container without any configuration, use the 
+//! [`ServiceContainer::empty()`] method.
+//!
+//! ```rust
+//! use rscontainer::ServiceContainer;
+//!
+//! fn main() {
+//!     let mut container = ServiceContainer::empty();
+//! }
+//! ```
+//!
+//! To register custom constructors, use the [`ContainerBuilder`].
+//!
+//! ```rust
+//! use rscontainer::ContainerBuilder;
+//!
+//! fn main() {
+//!     let mut builder = ContainerBuilder::new();
+//!     
+//!     builder.constructors::<MyService>(Some(|container| {
+//!         MyService::new_instance(container)
+//!     }), Some(|container| {
+//!         MyService::new_singleton(container)
+//!     }));
+//!
+//!     let mut container = builder.build();
+//! }
+//! ```
+//!
 //! # Using the Service Container with static services
 //!
-//! **Singletons** are instances which are shared throughout your application.
-//! Each time you resolve a singleton, you will get the same instance. A
-//! singleton is always behind a shared smart pointer, such as `Arc` or `Rc`,
-//!  and may have an access mechanism such as `RefCell` or `Mutex`. Each
-//! service decides for themselve which kind of pointer and mechanism they use.
-//! The first time you ask for an instance of a certain singleton, the
-//! container constructs it and recursively constructs and injects the
-//! neccessary dependencies. The instance is than stored in the container.
+//! [**Singletons**] are instances which are shared throughout your 
+//! application. Each time you resolve a singleton, you will get the same 
+//! instance. A singleton is always behind a shared smart pointer, such as 
+//! `Arc` or `Rc` and may have an access mechanism such as `RefCell` or 
+//! `Mutex`. Each service decides for themselve which kind of pointer and 
+//! mechanism they use. The first time you ask for an instance of a certain 
+//! singleton, the container constructs it and recursively constructs and 
+//! injects the neccessary dependencies. The instance is than stored in the 
+//! container.
 //!
 //! To read from or mutate a singleton, you use the `read()` and `write()`
 //! methods. This might lock the singleton, so immediately use the result
@@ -37,9 +69,9 @@
 //! let something = singleton.read().get_something();
 //! ```
 //!
-//! **Instances** are instances which are different each time you resolve them
-//! from the container. They are not behind a pointer and access mechanism.
-//! The container will still take care of injecting the neccessary
+//! [**Instances**] are instances which are different each time you resolve 
+//! them from the container. They are not behind a pointer and access 
+//! mechanism. The container will still take care of injecting the neccessary
 //! dependencies.
 //!
 //! Because instances are not behind a pointer, you don't need `read()` or
@@ -53,17 +85,25 @@
 //! let instance: Instance<MyService> = container.resolve();
 //! ```
 //!
-//! `Singleton<T>` and `Instance<T>` do not carry a lifetime parameter,
+//! [`Singleton<T>`] and [`Instance<T>`] do not carry a lifetime parameter,
 //! therefore they can be stored in structs and enums very easily.
 //!
-//! # Creating a service
+//! # Enabling a type to be used as a Service
 //!
 //! To enable a type to be resolved through the service container, you need to
-//! implement the `IService` trait on it. See the documentation of this trait
+//! implement the [`IService`] trait on it. See the documentation of this trait
 //! for more information.
 //!
 //! If your service depends on other services, you need to store these services
-//! as fields in your struct as `Singleton<T>` or `Instance<T>`.
+//! as fields in your struct as [`Singleton<T>`] or [`Instance<T>`].
+//!
+//! [`ServiceContainer::empty()`]: struct.ServiceContainer.html#method.empty
+//! [`ContainerBuilder`]: struct.ContainerBuilder.html
+//! [**Singletons**]: struct.Singleton.html
+//! [**Instances**]: struct.Instance.html
+//! [`IService`]: trait.IService.html
+//! [`Singleton<T>`]: struct.Singleton.html
+//! [`Instance<T>`]: struct.Instance.html
 
 mod builder;
 mod helpers;
