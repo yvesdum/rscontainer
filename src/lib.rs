@@ -151,7 +151,7 @@ impl ServiceContainer {
 
         // Check if we have a saved instance and return it.
         if let Some(singleton) = self.singletons.get(&key) {
-            let raw_ptr = singleton.ptr.as_ptr() as *const u8;
+            let raw_ptr = singleton.ptr.as_ptr();
             let smart_ptr = unsafe { T::Pointer::from_type_erased_raw(raw_ptr) };
             let pointer = smart_ptr.clone();
             return Singleton { pointer };
@@ -263,7 +263,7 @@ impl ServiceContainer {
     {
         let key = TypeId::of::<T>();
         if let Some(singleton) = self.singletons.remove(&key) {
-            let raw_ptr = singleton.ptr.as_ptr() as *const u8;
+            let raw_ptr = singleton.ptr.as_ptr();
             let pointer = unsafe { T::Pointer::from_type_erased_raw(raw_ptr) };
             Some(Singleton { pointer })
         } else {

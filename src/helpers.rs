@@ -18,12 +18,12 @@ pub(crate) struct SingletonPtr {
     /// `IPointer`.
     pub ptr: NonNull<()>,
     /// The `drop_type_erased()` method of the `IPointer` trait implementation.
-    pub dtor: unsafe fn(*const u8),
+    pub dtor: unsafe fn(*const ()),
 }
 
 impl Drop for SingletonPtr {
     fn drop(&mut self) {
-        unsafe { (self.dtor)(self.ptr.as_ptr() as *const u8) }
+        unsafe { (self.dtor)(self.ptr.as_ptr()) }
     }
 }
 

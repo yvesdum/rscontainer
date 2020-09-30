@@ -25,7 +25,7 @@ pub unsafe trait IPointer {
     ///
     /// After calling this method, dropping of the smart pointer should be
     /// manually handled.
-    unsafe fn into_type_erased_raw(self) -> *const u8;
+    unsafe fn into_type_erased_raw(self) -> *const ();
 
     /// Re-inits the smart pointer from a type erased pointer.
     ///
@@ -36,7 +36,7 @@ pub unsafe trait IPointer {
     ///
     /// Apart from dropping, the returned smart pointer should always be cloned
     /// before it's used, because this method does not increase the ref count.
-    unsafe fn from_type_erased_raw(ptr: *const u8) -> Self
+    unsafe fn from_type_erased_raw(ptr: *const ()) -> Self
     where
         Self: Sized;
 
@@ -47,7 +47,7 @@ pub unsafe trait IPointer {
     ///
     /// `ptr` should be created by the `into_type_erased_raw()` method of the 
     /// same impl block. This ensures that `ptr` has the same type as `Self`.
-    unsafe fn drop_type_erased(ptr: *const u8)
+    unsafe fn drop_type_erased(ptr: *const ())
     where
         Self: Sized,
     {
@@ -76,11 +76,11 @@ pub trait IWritePointer<'a> {
 ///////////////////////////////////////////////////////////////////////////////
 
 unsafe impl<T: IService> IPointer for Rc<T> {
-    unsafe fn into_type_erased_raw(self) -> *const u8 {
-        Rc::into_raw(self) as *const u8
+    unsafe fn into_type_erased_raw(self) -> *const () {
+        Rc::into_raw(self) as *const ()
     }
 
-    unsafe fn from_type_erased_raw(ptr: *const u8) -> Self
+    unsafe fn from_type_erased_raw(ptr: *const ()) -> Self
     where
         Self: Sized,
     {
@@ -101,11 +101,11 @@ impl<'a, T: IService + 'a> IReadPointer<'a> for Rc<T> {
 ///////////////////////////////////////////////////////////////////////////////
 
 unsafe impl<T: IService> IPointer for Rc<RefCell<T>> {
-    unsafe fn into_type_erased_raw(self) -> *const u8 {
-        Rc::into_raw(self) as *const u8
+    unsafe fn into_type_erased_raw(self) -> *const () {
+        Rc::into_raw(self) as *const ()
     }
 
-    unsafe fn from_type_erased_raw(ptr: *const u8) -> Self
+    unsafe fn from_type_erased_raw(ptr: *const ()) -> Self
     where
         Self: Sized,
     {
@@ -134,11 +134,11 @@ impl<'a, T: IService + 'a> IWritePointer<'a> for Rc<RefCell<T>> {
 ///////////////////////////////////////////////////////////////////////////////
 
 unsafe impl<T: IService> IPointer for Arc<T> {
-    unsafe fn into_type_erased_raw(self) -> *const u8 {
-        Arc::into_raw(self) as *const u8
+    unsafe fn into_type_erased_raw(self) -> *const () {
+        Arc::into_raw(self) as *const ()
     }
 
-    unsafe fn from_type_erased_raw(ptr: *const u8) -> Self
+    unsafe fn from_type_erased_raw(ptr: *const ()) -> Self
     where
         Self: Sized,
     {
@@ -160,11 +160,11 @@ impl<'a, T: IService + 'a> IReadPointer<'a> for Arc<T> {
 ///////////////////////////////////////////////////////////////////////////////
 
 unsafe impl<T: IService> IPointer for Arc<Mutex<T>> {
-    unsafe fn into_type_erased_raw(self) -> *const u8 {
-        Arc::into_raw(self) as *const u8
+    unsafe fn into_type_erased_raw(self) -> *const () {
+        Arc::into_raw(self) as *const ()
     }
 
-    unsafe fn from_type_erased_raw(ptr: *const u8) -> Self
+    unsafe fn from_type_erased_raw(ptr: *const ()) -> Self
     where
         Self: Sized,
     {
@@ -197,11 +197,11 @@ impl<'a, T: IService + 'a> IWritePointer<'a> for Arc<Mutex<T>> {
 ///////////////////////////////////////////////////////////////////////////////
 
 unsafe impl<T: IService> IPointer for Arc<RwLock<T>> {
-    unsafe fn into_type_erased_raw(self) -> *const u8 {
-        Arc::into_raw(self) as *const u8
+    unsafe fn into_type_erased_raw(self) -> *const () {
+        Arc::into_raw(self) as *const ()
     }
 
-    unsafe fn from_type_erased_raw(ptr: *const u8) -> Self
+    unsafe fn from_type_erased_raw(ptr: *const ()) -> Self
     where
         Self: Sized,
     {
