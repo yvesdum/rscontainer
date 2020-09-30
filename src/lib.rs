@@ -6,9 +6,10 @@
 //! * Dependency Injection
 //! * Storage and management of Singletons
 //! * Compatible with multiple smart pointer types, locking mechanisms and
-//!   interiour mutability mechanisms.
+//!   interiour mutability mechanisms
 //! * No setup step required
-//! * Works with any existing type without writing complicated wrapper types.
+//! * Works with any existing type without writing complicated wrapper types
+//! * Optional registration of custom constructors
 //!
 //! # Using the Service Container with static services
 //!
@@ -64,18 +65,21 @@
 //! If your service depends on other services, you need to store these services
 //! as fields in your struct as `Singleton<T>` or `Instance<T>`.
 
+mod builder;
 mod helpers;
 mod static_services;
 
+pub use crate::builder::ContainerBuilder;
 pub use crate::static_services::getters::{Instance, Singleton};
 pub use crate::static_services::service_traits::IService;
 
-use crate::helpers::IResolve;
-use crate::static_services::pointers::{IPointer, ServicePointer};
+use crate::helpers::{Constructor, Constructors, IResolve, SingletonPtr};
+use crate::static_services::pointers::IPointer;
 use log::trace;
 use std::any::type_name;
 use std::any::TypeId;
 use std::collections::HashMap;
+use std::ptr::NonNull;
 
 //////////////////////////////////////////////////////////////////////////////
 // Main Service Container
@@ -85,7 +89,8 @@ use std::collections::HashMap;
 ///
 /// Manages dependencies between these services.
 pub struct ServiceContainer {
-    singletons: HashMap<TypeId, ServicePointer>
+    singletons: HashMap<TypeId, SingletonPtr>,
+    constructors: Option<HashMap<TypeId, Constructors>>,
 }
 
 impl ServiceContainer {
@@ -94,16 +99,29 @@ impl ServiceContainer {
     //////////////////////////////////////////////////////////////////////////
 
     /// Creates a new, empty service container.
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         Self {
-            singletons: HashMap::new()
+            singletons: HashMap::new(),
+            constructors: None,
+        }
+    }
+
+    /// Creates a new service container.
+    pub(crate) fn new(
+        singletons: HashMap<TypeId, SingletonPtr>,
+        constructors: Option<HashMap<TypeId, Constructors>>,
+    ) -> Self {
+        Self {
+            singletons,
+            constructors,
         }
     }
 
     /// Creates a new service container with the specified reserved capacity.
     pub fn with_capacity(singletons: usize) -> Self {
         Self {
-            singletons: HashMap::with_capacity(singletons)
+            singletons: HashMap::with_capacity(singletons),
+            constructors: None,
         }
     }
 
@@ -131,17 +149,43 @@ impl ServiceContainer {
         trace!("Resolving singleton {}", type_name::<T>());
         let key = TypeId::of::<T>();
 
-        if let Some(service) = self.singletons.get(&key) {
-            // If the key (which is the type id of `T`) exists, we can
-            // guarantee that the service at this key has the same type as
-            // `T`, so this is safe.
-            let pointer = unsafe { service.as_pointer_unchecked() };
+        // Check if we have a saved instance and return it.
+        if let Some(singleton) = self.singletons.get(&key) {
+            let raw_ptr = singleton.ptr.as_ptr() as *const u8;
+            let smart_ptr = unsafe { T::Pointer::from_type_erased_raw(raw_ptr) };
+            let pointer = smart_ptr.clone();
             return Singleton { pointer };
         }
 
-        let pointer = T::construct_singleton(self);
-        let service = ServicePointer::from_pointer(pointer.clone());
-        self.singletons.insert(key, service);
+        // If there's no saved instance, check if there is
+        // a custom constructor registered.
+        let ctor = if let Some(ctors) = &self.constructors {
+            if let Some(ctors) = ctors.get(&key) {
+                ctors.singleton
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // If there is a custom constructor, call it. If there is none,
+        // call the default constructor.
+        let pointer = if let Some(ctor) = ctor {
+            let ctor: Constructor<T::Pointer> = unsafe { std::mem::transmute(ctor) };
+            ctor(self)
+        } else {
+            T::construct_singleton(self)
+        };
+
+        // Store a clone of the singleton in the container.
+        let raw_ptr = unsafe { T::Pointer::into_type_erased_raw(pointer.clone()) };
+        let nonnull_ptr = unsafe { NonNull::new_unchecked(raw_ptr as *mut ()) };
+        let singleton_ptr = SingletonPtr {
+            ptr: nonnull_ptr,
+            dtor: T::Pointer::drop_type_erased,
+        };
+        self.singletons.insert(key, singleton_ptr);
 
         Singleton { pointer }
     }
@@ -149,10 +193,31 @@ impl ServiceContainer {
     /// Constructs an instance through the service container.
     pub fn resolve_instance<T>(&mut self) -> Instance<T>
     where
-        T: IService,
+        T: IService + 'static,
     {
         trace!("Resolving instance {}", type_name::<T>());
-        let instance = T::construct(self);
+        let key = TypeId::of::<T>();
+
+        // Check if there's a custom constructor registered.
+        let ctor = if let Some(ctors) = &self.constructors {
+            if let Some(ctors) = ctors.get(&key) {
+                ctors.instance
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // If there is a custom constructor, call it. If there is none,
+        // call the default constructor.
+        let instance = if let Some(ctor) = ctor {
+            let ctor: Constructor<T::Instance> = unsafe { std::mem::transmute(ctor) };
+            ctor(self)
+        } else {
+            T::construct(self)
+        };
+
         Instance { instance }
     }
 
@@ -197,11 +262,9 @@ impl ServiceContainer {
         T: IService + 'static,
     {
         let key = TypeId::of::<T>();
-        if let Some(service) = self.singletons.remove(&key) {
-            // We can guarantee that the raw pointer behind this key has the
-            // same type as `T`. Since we take the smart pointer out of the
-            // arena, we don't need to clone it.
-            let pointer = unsafe { T::Pointer::from_type_erased_raw(service.ptr) };
+        if let Some(singleton) = self.singletons.remove(&key) {
+            let raw_ptr = singleton.ptr.as_ptr() as *const u8;
+            let pointer = unsafe { T::Pointer::from_type_erased_raw(raw_ptr) };
             Some(Singleton { pointer })
         } else {
             None

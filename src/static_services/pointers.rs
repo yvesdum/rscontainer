@@ -7,44 +7,6 @@ use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuar
 use std::ops::Deref;
 
 ///////////////////////////////////////////////////////////////////////////////
-// Internal storage of a service in the container
-///////////////////////////////////////////////////////////////////////////////
-
-/// Type-erased pointer to a service.
-pub(crate) struct ServicePointer {
-    /// The raw version of a ref counted smart pointer that implements 
-    /// `IPointer`.
-    pub ptr: *const u8,
-    /// The `drop_type_erased()` method of the `IPointer` trait implementation.
-    pub dtor: unsafe fn(*const u8),
-}
-
-impl Drop for ServicePointer {
-    fn drop(&mut self) {
-        unsafe { (self.dtor)(self.ptr) }
-    }
-}
-
-impl ServicePointer {
-    /// Create a service pointer from a smart pointer.
-    pub(crate) fn from_pointer<T: IPointer>(pointer: T) -> Self {
-        ServicePointer {
-            ptr: unsafe { pointer.into_type_erased_raw() },
-            dtor: T::drop_type_erased,
-        }
-    }
-
-    /// Create a smart pointer from this service pointer.
-    ///
-    /// # Safety
-    ///
-    /// `ptr` in `self` needs to have the same type as `T`.
-    pub(crate) unsafe fn as_pointer_unchecked<T: IPointer + Clone>(&self) -> T {
-        T::from_type_erased_raw(self.ptr).clone()
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////
 // Main Traits
 ///////////////////////////////////////////////////////////////////////////////
 

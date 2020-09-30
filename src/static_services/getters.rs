@@ -101,7 +101,7 @@ where
 
 impl<T> IResolve for Instance<T>
 where
-    T: IService,
+    T: IService + 'static,
 {
     fn resolve(ctn: &mut ServiceContainer) -> Self {
         ctn.resolve_instance()
