@@ -14,13 +14,13 @@
 //! # Creating a Service Container
 //!
 //! To create a service container without any configuration, use the 
-//! [`ServiceContainer::empty()`] method.
+//! [`ServiceContainer::new()`] method.
 //!
 //! ```rust
 //! use rscontainer::ServiceContainer;
 //!
 //! fn main() {
-//!     let mut container = ServiceContainer::empty();
+//!     let mut container = ServiceContainer::new();
 //! }
 //! ```
 //!
@@ -84,7 +84,7 @@
 //! to use any existing type as a service. See the documentation of this trait
 //! for more information.
 //!
-//! [`ServiceContainer::empty()`]: crate::ServiceContainer::empty
+//! [`ServiceContainer::new()`]: crate::ServiceContainer::new
 //! [`ContainerBuilder`]: crate::ContainerBuilder
 //! [`Singleton<T>`]: crate::Singleton
 //! [`Instance<T>`]: crate::Instance
@@ -124,15 +124,15 @@ impl ServiceContainer {
     //////////////////////////////////////////////////////////////////////////
 
     /// Creates a new, empty service container.
-    pub fn empty() -> Self {
+    pub fn new() -> Self {
         Self {
             singletons: HashMap::new(),
             constructors: HashMap::new(),
         }
     }
 
-    /// Creates a new service container.
-    pub(crate) fn new(
+    /// Creates a new service container that is already built.
+    pub(crate) fn new_built(
         singletons: HashMap<TypeId, SingletonPtr>,
         constructors: HashMap<TypeId, Constructors>,
     ) -> Self {
@@ -143,10 +143,10 @@ impl ServiceContainer {
     }
 
     /// Creates a new service container with the specified reserved capacity.
-    pub fn with_capacity(singletons: usize, constructors: usize) -> Self {
+    pub fn with_capacity(singletons: usize) -> Self {
         Self {
             singletons: HashMap::with_capacity(singletons),
-            constructors: HashMap::with_capacity(constructors),
+            constructors: HashMap::new(),
         }
     }
 

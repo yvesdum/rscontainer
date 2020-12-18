@@ -46,6 +46,6 @@ impl ContainerBuilder {
 
     /// Builds the service container.
     pub fn build(self) -> ServiceContainer {
-        ServiceContainer::new(HashMap::new(), self.ctors)
+        ServiceContainer::new_built(HashMap::new(), self.ctors)
     }
 }
