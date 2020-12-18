@@ -8,19 +8,19 @@ use std::collections::HashMap;
 
 /// Constructs a Service Container through the builder pattern.
 pub struct ContainerBuilder {
-    ctors: Option<HashMap<TypeId, Constructors>>,
+    ctors: HashMap<TypeId, Constructors>,
 }
 
 impl ContainerBuilder {
     /// Creates a new service container builder.
     pub fn new() -> Self {
-        Self { ctors: None }
+        Self { ctors: HashMap::new() }
     }
 
     /// Creates a new service container builder with the specified capacity.
     pub fn with_constructors_capacity(capacity: usize) -> Self {
         Self {
-            ctors: Some(HashMap::with_capacity(capacity)),
+            ctors: HashMap::with_capacity(capacity),
         }
     }
 
@@ -39,9 +39,7 @@ impl ContainerBuilder {
         };
 
         let type_id = TypeId::of::<T>();
-        self.ctors
-            .get_or_insert_with(|| HashMap::new())
-            .insert(type_id, constructors);
+        self.ctors.insert(type_id, constructors);
         
         self
     }

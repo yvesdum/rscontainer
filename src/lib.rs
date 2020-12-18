@@ -115,7 +115,7 @@ use std::ptr::NonNull;
 /// Manages dependencies between these services.
 pub struct ServiceContainer {
     singletons: HashMap<TypeId, SingletonPtr>,
-    constructors: Option<HashMap<TypeId, Constructors>>,
+    constructors: HashMap<TypeId, Constructors>,
 }
 
 impl ServiceContainer {
@@ -127,14 +127,14 @@ impl ServiceContainer {
     pub fn empty() -> Self {
         Self {
             singletons: HashMap::new(),
-            constructors: None,
+            constructors: HashMap::new(),
         }
     }
 
     /// Creates a new service container.
     pub(crate) fn new(
         singletons: HashMap<TypeId, SingletonPtr>,
-        constructors: Option<HashMap<TypeId, Constructors>>,
+        constructors: HashMap<TypeId, Constructors>,
     ) -> Self {
         Self {
             singletons,
@@ -143,10 +143,10 @@ impl ServiceContainer {
     }
 
     /// Creates a new service container with the specified reserved capacity.
-    pub fn with_capacity(singletons: usize) -> Self {
+    pub fn with_capacity(singletons: usize, constructors: usize) -> Self {
         Self {
             singletons: HashMap::with_capacity(singletons),
-            constructors: None,
+            constructors: HashMap::with_capacity(constructors),
         }
     }
 
@@ -188,9 +188,9 @@ impl ServiceContainer {
 
         // If there's no saved instance, check if there is
         // a custom constructor registered.
-        let ctors = match &self.constructors {
-            Some(ctors) => ctors.get(&key),
-            None => None
+        let ctors = match self.constructors.is_empty() {
+            true => None,
+            false => self.constructors.get(&key)
         };
 
         // If there is a custom constructor, call it. If there is none,
@@ -223,9 +223,9 @@ impl ServiceContainer {
         let key = TypeId::of::<T>();
 
         // Check if there's a custom constructor registered.
-        let ctors = match &self.constructors {
-            Some(ctors) => ctors.get(&key),
-            None => None
+        let ctors = match self.constructors.is_empty() {
+            true => None,
+            false => self.constructors.get(&key)
         };
 
         // If there is a custom constructor, call it. If there is none,
