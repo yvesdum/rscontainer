@@ -23,8 +23,20 @@ use std::ops::{Deref, DerefMut};
 /// A generalized smart pointer to a singleton that is resolved from the service
 /// container.
 ///
-/// To read from a singleton, use the `read()` method. To mutate a singleton,
-/// use the `write()` method.
+/// Singletons are instances which are shared throughout your 
+/// application. Each time you resolve a singleton, you will get the same 
+/// instance. A singleton is always behind a shared smart pointer, such as 
+/// `Arc` or `Rc` and may have an access mechanism such as `RefCell` or 
+/// `Mutex`. Each service decides for themselve which kind of pointer and 
+/// mechanism they use. The first time you ask for an instance of a certain 
+/// singleton, the container constructs it and recursively constructs and 
+/// injects the neccessary dependencies. The instance is than stored in the 
+/// container.
+///
+/// To read from or mutate a singleton, you use the `read()` and `write()`
+/// methods. This might lock the singleton, so immediately use the result
+/// of these methods or keep the results in a scope that is as short as
+/// possible.
 #[derive(Debug)]
 pub struct Singleton<T>
 where
@@ -89,8 +101,14 @@ where
 
 /// An instance of a service that is resolved from the service container.
 ///
-/// Instance implements `Deref` and `DerefMut` to be able to read and mutate
-/// the service.
+/// Instances are instances which are different each time you resolve 
+/// them from the container. They are not behind a pointer and access 
+/// mechanism. The container will still take care of injecting the neccessary
+/// dependencies.
+///
+/// Because instances are not behind a pointer, you don't need `read()` or
+/// `write()` to interact with them. Instances implement `Deref` and
+/// `DerefMut` instead.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Instance<T>
 where
