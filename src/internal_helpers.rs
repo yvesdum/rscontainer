@@ -28,7 +28,7 @@ impl GlobalPtr {
     pub fn new<P: IGlobalPointer>(instance: P) -> Self {
         GlobalPtr {
             ptr: unsafe { instance.into_ptr() },
-            dtor: P::drop,
+            dtor: P::drop_from_ptr,
         }
     }
 }

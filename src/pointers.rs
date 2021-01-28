@@ -64,8 +64,8 @@ pub unsafe trait IGlobalPointer: Sized + Clone {
     ///
     /// After this method `ptr` points to possibly freed memory, so it should 
     /// not be used anymore.
-    unsafe fn drop(ptr: NonNull<()>) {
-        drop_in_place(ptr.as_ptr())
+    unsafe fn drop_from_ptr(ptr: NonNull<()>) {
+        drop(Self::from_ptr(ptr))
     }
 
     /// Returns true if `self` points to the same location as `other`.
