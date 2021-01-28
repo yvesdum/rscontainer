@@ -68,17 +68,13 @@ pub trait IAccess {
     ///
     /// The parameter of the closure contains the poisoning status of the
     /// instance.
-    fn access_poisoned<U, F: FnOnce(Poisoning<&Self::Target>) -> U>(&self, f: F) -> U {
-        self.try_access(f).unwrap()
-    }
+    fn access_poisoned<U, F: FnOnce(Poisoning<&Self::Target>) -> U>(&self, f: F) -> U;
 
     /// Get access to the global instance through a closure.
     ///
     /// Panics if the global instance is poisoned or already mutably borrowed.
     #[track_caller]
-    fn access<U, F: FnOnce(&Self::Target) -> U>(&self, f: F) -> U {
-        self.access_poisoned(|poisoned| f(poisoned.assert_healthy()))
-    }
+    fn access<U, F: FnOnce(&Self::Target) -> U>(&self, f: F) -> U;
 }
 
 /// Provides mutable access to a global instance.
@@ -96,17 +92,13 @@ pub trait IAccessMut: IAccess {
     ///
     /// The parameter of the closure contains the poisoning status of the
     /// instance.
-    fn access_poisoned_mut<U, F: FnOnce(Poisoning<&mut Self::Target>) -> U>(&self, f: F) -> U {
-        self.try_access_mut(f).unwrap()
-    }
+    fn access_poisoned_mut<U, F: FnOnce(Poisoning<&mut Self::Target>) -> U>(&self, f: F) -> U;
 
     /// Get mutable access to the global instance through a closure.
     ///
     /// Panics if the global instance is poisoned or already mutably borrowed.
     #[track_caller]
-    fn access_mut<U, F: FnOnce(&mut Self::Target) -> U>(&self, f: F) -> U {
-        self.access_poisoned_mut(|poisoned| f(poisoned.assert_healthy()))
-    }
+    fn access_mut<U, F: FnOnce(&mut Self::Target) -> U>(&self, f: F) -> U;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
