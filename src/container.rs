@@ -1,80 +1,11 @@
 //! Container version 2.0
 
-use super::getters::{Global, IResolveGlobal, IResolveLocal, Local};
-use super::pointers::IGlobalPointer;
-use super::service_traits::{IGlobal, ILocal};
+use crate::{ContainerBuilder, getters::{Global, IResolveGlobal, IResolveLocal, Local}};
+use crate::internal_helpers::{GlobalCtor, GlobalPtr, LocalCtor, TypeErasedService};
+use crate::pointers::IGlobalPointer;
+use crate::service_traits::{IGlobal, ILocal};
 use fnv::FnvHashMap;
 use std::any::TypeId;
-use std::collections::hash_map::Entry;
-use std::fmt;
-use std::ptr::NonNull;
-
-///////////////////////////////////////////////////////////////////////////////
-// Internal Storage Helpers
-///////////////////////////////////////////////////////////////////////////////
-
-/// A raw pointer to a singleton instance with drop logic.
-/// This is a type-erased `Rc` or `Arc` that implements `ISingletonPointer`.
-#[derive(Debug)]
-struct GlobalPtr {
-    ptr: NonNull<()>,
-    dtor: unsafe fn(NonNull<()>),
-}
-
-impl Drop for GlobalPtr {
-    fn drop(&mut self) {
-        #[cfg(test)]
-        println!("Dropping SingletonPtr {:p}", self);
-
-        unsafe { (self.dtor)(self.ptr) }
-    }
-}
-
-impl GlobalPtr {
-    fn new<P: IGlobalPointer>(instance: P) -> Self {
-        GlobalPtr {
-            ptr: unsafe { instance.into_ptr() },
-            dtor: P::drop,
-        }
-    }
-}
-
-/// A custom constructor for a global instance.
-type GlobalCtor<S> = fn(&mut ServiceContainer) -> Result<Global<S>, <S as IGlobal>::Error>;
-
-/// A custom constructor for a local instance.
-type LocalCtor<S> =
-    fn(&mut ServiceContainer, <S as ILocal>::Parameters) -> Result<Local<S>, <S as ILocal>::Error>;
-
-/// A service in the container that is type erased.
-pub(crate) struct TypeErasedService {
-    /// A raw pointer to the global instance.
-    global_ptr: Option<GlobalPtr>,
-    /// Custom constructor for a global instance.
-    global_ctor: Option<GlobalCtor<()>>,
-    /// Custom constructor for a local instance.
-    local_ctor: Option<LocalCtor<()>>,
-}
-
-impl TypeErasedService {
-    fn new(global_ptr: GlobalPtr) -> Self {
-        Self {
-            global_ptr: Some(global_ptr),
-            global_ctor: None,
-            local_ctor: None,
-        }
-    }
-}
-
-impl fmt::Debug for TypeErasedService {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TypeErasedService")
-            .field("global_ptr", &self.global_ptr)
-            .field("global_ctor", &self.global_ctor.is_some())
-            .field("local_ctor", &self.local_ctor.is_some())
-            .finish()
-    }
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Container
@@ -102,6 +33,21 @@ impl ServiceContainer {
         }
     }
 
+    /// Creates a container that is already built by the ContainerBuilder.
+    pub(crate) fn new_built(services: FnvHashMap<TypeId, TypeErasedService>) -> Self {
+        Self { services }
+    }
+
+    /// Creates a ContainerBuilder.
+    pub fn builder() -> ContainerBuilder {
+        ContainerBuilder::new()
+    }
+
+    /// Creates a ContainerBuilder with the specified capacity.
+    pub fn builder_with_capcity(capacity: usize) -> ContainerBuilder {
+        ContainerBuilder::with_capacity(capacity)
+    }
+
     /// Returns the inner hashmap for testing purposes.
     #[cfg(test)]
     #[allow(unused)]
@@ -112,20 +58,11 @@ impl ServiceContainer {
     /// Inserts a global instance.
     ///
     /// Panics if the instance already exists, because it is not allowed to
-    /// mutate the container after it's built.
+    /// mutate the container after it is built.
     pub fn insert<S: 'static + ?Sized + IGlobal>(&mut self, singleton: Global<S>) {
-        match self.services.entry(TypeId::of::<S>()) {
-            Entry::Vacant(entry) => {
-                entry.insert(TypeErasedService::new(GlobalPtr::new(
-                    singleton.into_inner(),
-                )));
-            }
-            Entry::Occupied(mut entry) => {
-                let service = entry.get_mut();
-                assert!(service.global_ptr.is_none());
-                service.global_ptr = Some(GlobalPtr::new(singleton.into_inner()));
-            }
-        }
+        let entry = self.services.entry(TypeId::of::<S>()).or_default();
+        assert!(entry.global_ptr.is_none());
+        entry.global_ptr = Some(GlobalPtr::new(singleton.into_inner()));
     }
 
     ///////////////////////////////////////////////////////////////////////////

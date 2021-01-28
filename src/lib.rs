@@ -10,20 +10,23 @@
 //! * Setup is optional, not required
 
 mod access;
+mod builder;
 mod container;
 mod getters;
+mod internal_helpers;
 mod pointers;
 mod service_traits;
 
 pub use self::access::{Access, Poisoning};
+pub use self::builder::ContainerBuilder;
 pub use self::container::ServiceContainer;
-pub use self::getters::{Instance, Local, Global};
+pub use self::getters::{Global, Instance, Local};
 pub use self::service_traits::{IGlobal, ILocal};
 
 /// Types for extending the functionality of rscontainer.
 pub mod internals {
     pub use crate::access::{IAccess, IAccessMut};
-    pub use crate::getters::{IResolveLocal, IResolveGlobal};
+    pub use crate::getters::{IResolveGlobal, IResolveLocal};
     pub use crate::pointers::IGlobalPointer;
 }
 

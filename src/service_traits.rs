@@ -12,7 +12,21 @@ use std::rc::Rc;
 
 /// A type that can be used as a global service.
 pub trait IGlobal {
-    /// The type of the smart pointer to the service.
+    /// The type of the smart pointer to the service. Supported by default:
+    ///
+    /// * `Rc<Access<T>>`
+    /// * `Rc<Cell<T>>`
+    /// * `Rc<RefCell<T>>`
+    /// * `Arc<Access<T>>`
+    /// * `Arc<Mutex<T>>`
+    /// * `Arc<RwLock<T>>`
+    ///
+    /// Where `T` is equal to `Self::Access`. 
+    ///
+    /// Use the [`Access`] wrapper if the type is read-only or already 
+    /// implements interior mutability.
+    ///
+    /// [`Access`]: crate::access::Access
     type Pointer: IGlobalPointer + IAccess<Target = Self::Access>;
 
     /// The type that is used to access the singleton.

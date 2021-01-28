@@ -50,21 +50,21 @@ impl<S> Poisoning<S> {
 // Traits
 ///////////////////////////////////////////////////////////////////////////////
 
-/// Provides access to a singleton.
+/// Provides access to a global instance.
 pub trait IAccess {
     /// The actual type of the instance.
     type Target;
 
-    /// Tries to get access to the singleton through a closure.
+    /// Tries to get access to the global instance through a closure.
     ///
-    /// Returns `None` if the access failed, for example if the singleton is
-    /// already locked or mutably borrowed.
+    /// Returns `None` if the access failed, for example if the global instance 
+    /// is already locked or mutably borrowed.
     ///
     /// The parameter of the closure contains the poisoning status of the
     /// instance.
     fn try_access<U, F: FnOnce(Poisoning<&Self::Target>) -> U>(&self, f: F) -> Option<U>;
 
-    /// Get access to the singleton through a closure.
+    /// Get access to the global instance through a closure.
     ///
     /// The parameter of the closure contains the poisoning status of the
     /// instance.
@@ -72,27 +72,27 @@ pub trait IAccess {
         self.try_access(f).unwrap()
     }
 
-    /// Get access to the singleton through a closure.
+    /// Get access to the global instance through a closure.
     ///
-    /// Panics if the singleton is poisoned or already mutably borrowed.
+    /// Panics if the global instance is poisoned or already mutably borrowed.
     #[track_caller]
     fn access<U, F: FnOnce(&Self::Target) -> U>(&self, f: F) -> U {
         self.access_poisoned(|poisoned| f(poisoned.assert_healthy()))
     }
 }
 
-/// Provides mutable access to a singleton.
+/// Provides mutable access to a global instance.
 pub trait IAccessMut: IAccess {
-    /// Tries to get mutable access to the singleton through a closure.
+    /// Tries to get mutable access to the global instance through a closure.
     ///
-    /// Returns `None` if the access failed, for example if the singleton is
+    /// Returns `None` if the access failed, for example if the global instance is
     /// already locked or mutably borrowed.
     ///
     /// The parameter of the closure contains the poisoning status of the
     /// instance.
     fn try_access_mut<U, F: FnOnce(Poisoning<&mut Self::Target>) -> U>(&self, f: F) -> Option<U>;
 
-    /// Get mutable access to the singleton through a closure.
+    /// Get mutable access to the global instance through a closure.
     ///
     /// The parameter of the closure contains the poisoning status of the
     /// instance.
@@ -100,9 +100,9 @@ pub trait IAccessMut: IAccess {
         self.try_access_mut(f).unwrap()
     }
 
-    /// Get mutable access to the singleton through a closure.
+    /// Get mutable access to the global instance through a closure.
     ///
-    /// Panics if the singleton is poisoned or already mutably borrowed.
+    /// Panics if the global instance is poisoned or already mutably borrowed.
     #[track_caller]
     fn access_mut<U, F: FnOnce(&mut Self::Target) -> U>(&self, f: F) -> U {
         self.access_poisoned_mut(|poisoned| f(poisoned.assert_healthy()))
