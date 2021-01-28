@@ -2,33 +2,33 @@
 
 use super::access::{IAccess, IAccessMut};
 use super::container::ServiceContainer;
-use super::pointers::ISingletonPointer;
-use super::service_trait::IService;
+use super::pointers::IGlobalPointer;
+use super::service_traits::{IGlobal, IInstance, ILocal};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 
 ///////////////////////////////////////////////////////////////////////////////
-// Helper Trait
+// Helper Traits
 ///////////////////////////////////////////////////////////////////////////////
 
-/// An instance that can be resolved from the service container.
-pub trait IResolve: Sized {
+/// A global instance that can be resolved from the service container.
+pub trait IResolveGlobal: Sized {
     type Error;
 
     /// Resolve the instance from the container.
     fn resolve(ctn: &mut ServiceContainer) -> Result<Self, Self::Error>;
 }
 
-/// A singleton instance that can be resolved from the service container.
-pub trait IResolveSingleton: IResolve {
-    /// Resolve the instance from the container.
-    fn resolve_singleton(ctn: &mut ServiceContainer) -> Result<Self, Self::Error>;
-}
-
 /// A local instance that can be resolved from the service container.
-pub trait IResolveLocal: IResolve {
+pub trait IResolveLocal: Sized {
+    type Error;
+    type Parameters;
+
     /// Resolve the instance from the container.
-    fn resolve_local(ctn: &mut ServiceContainer) -> Result<Self, Self::Error>;
+    fn resolve(
+        ctn: &mut ServiceContainer,
+        params: Self::Parameters,
+    ) -> Result<Self, Self::Error>;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -37,28 +37,21 @@ pub trait IResolveLocal: IResolve {
 
 /// A pointer to a singleton from the service container.
 #[repr(transparent)]
-pub struct Singleton<S: ?Sized + IService> {
+pub struct Global<S: ?Sized + IGlobal> {
     /// The actual smart pointer to the singleton instance.
     inner: S::Pointer,
 }
 
-impl<S: 'static + IService> IResolve for Singleton<S> {
+impl<S: 'static + ?Sized + IGlobal> IResolveGlobal for Global<S> {
     type Error = S::Error;
 
     #[inline]
     fn resolve(ctn: &mut ServiceContainer) -> Result<Self, Self::Error> {
-        ctn.resolve_singleton()
+        ctn.resolve_global()
     }
 }
 
-impl<S: 'static + IService> IResolveSingleton for Singleton<S> {
-    #[inline]
-    fn resolve_singleton(ctn: &mut ServiceContainer) -> Result<Self, Self::Error> {
-        ctn.resolve_singleton()
-    }
-}
-
-impl<S: IService> Singleton<S> {
+impl<S: ?Sized + IGlobal> Global<S> {
     /// Creates a singleton from the inner smart pointer.
     pub fn new(inner: S::Pointer) -> Self {
         Self { inner }
@@ -106,7 +99,7 @@ impl<S: IService> Singleton<S> {
     }
 }
 
-impl<S: IService> Deref for Singleton<S>
+impl<S: ?Sized + IGlobal> Deref for Global<S>
 where
     S::Pointer: Deref,
 {
@@ -117,7 +110,7 @@ where
     }
 }
 
-impl<S: IService> Clone for Singleton<S> {
+impl<S: ?Sized + IGlobal> Clone for Global<S> {
     /// Clones the pointer to the singleton instance.
     ///
     /// Only increases the reference count, so this is very cheap.
@@ -126,13 +119,13 @@ impl<S: IService> Clone for Singleton<S> {
     /// [`Rc::clone`]: std::rc::Rc::clone
     /// [`Arc::clone`]: std::sync::Arc::clone
     fn clone(&self) -> Self {
-        Singleton {
+        Global {
             inner: self.inner.clone(),
         }
     }
 }
 
-impl<S: IService> fmt::Debug for Singleton<S>
+impl<S: ?Sized + IGlobal> fmt::Debug for Global<S>
 where
     S::Pointer: fmt::Debug,
 {
@@ -149,36 +142,28 @@ where
 
 /// A local instance of a service.
 #[repr(transparent)]
-pub struct Local<S: ?Sized + IService> {
+pub struct Local<S: ?Sized + ILocal> {
     /// The actual instance of the service.
     inner: S::Instance,
 }
 
-impl<S> IResolve for Local<S>
+impl<S: 'static + ?Sized + ILocal> IResolveLocal for Local<S>
 where
-    S: 'static + IService,
-    S::Params: Default,
+    S::Parameters: Default,
 {
     type Error = S::Error;
+    type Parameters = S::Parameters;
 
     #[inline]
-    fn resolve(ctn: &mut ServiceContainer) -> Result<Self, Self::Error> {
-        ctn.resolve_local_default()
+    fn resolve(
+        ctn: &mut ServiceContainer,
+        params: Self::Parameters,
+    ) -> Result<Self, Self::Error> {
+        ctn.resolve_local(params)
     }
 }
 
-impl<S> IResolveLocal for Local<S>
-where
-    S: 'static + IService,
-    S::Params: Default,
- {
-    #[inline]
-    fn resolve_local(ctn: &mut ServiceContainer) -> Result<Self, Self::Error> {
-        ctn.resolve_local_default()
-    }
-}
-
-impl<S: IService> Local<S> {
+impl<S: ?Sized + ILocal> Local<S> {
     /// Creates a local service from the inner instance.
     pub fn new(inner: S::Instance) -> Self {
         Self { inner }
@@ -216,7 +201,7 @@ impl<S: IService> Local<S> {
     }
 }
 
-impl<S: IService> Deref for Local<S> {
+impl<S: ?Sized + ILocal> Deref for Local<S> {
     type Target = S::Instance;
 
     fn deref(&self) -> &Self::Target {
@@ -224,13 +209,13 @@ impl<S: IService> Deref for Local<S> {
     }
 }
 
-impl<S: IService> DerefMut for Local<S> {
+impl<S: ?Sized + ILocal> DerefMut for Local<S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner_mut()
     }
 }
 
-impl<S: IService> Clone for Local<S>
+impl<S: ?Sized + ILocal> Clone for Local<S>
 where
     S::Instance: Clone,
 {
@@ -244,7 +229,7 @@ where
     }
 }
 
-impl<S: IService> fmt::Debug for Local<S>
+impl<S: ?Sized + ILocal> fmt::Debug for Local<S>
 where
     S::Instance: fmt::Debug,
 {
@@ -258,47 +243,48 @@ where
 ///////////////////////////////////////////////////////////////////////////////
 
 /// Some instance of a service, either a singleton or local instance.
-pub enum Instance<S: ?Sized + IService> {
-    Singleton(S::Pointer),
-    Local(S::Instance),
+///
+/// Use this as a field, when you want the user to decide whether they want to
+/// supply a global or local instance.
+pub enum Instance<S: ?Sized + IInstance> {
+    Global(Global<S>),
+    Local(Local<S>),
 }
 
-impl<S: 'static + IService> IResolve for Instance<S> {
-    type Error = S::Error;
+impl<S: 'static + ?Sized + IInstance> IResolveLocal for Instance<S>
+where
+    S::Parameters: Default,
+{
+    type Error = <S as ILocal>::Error;
+    type Parameters = <S as ILocal>::Parameters;
+
+    #[inline]
+    fn resolve(
+        ctn: &mut ServiceContainer,
+        params: Self::Parameters,
+    ) -> Result<Self, Self::Error> {
+        ctn.resolve_local(params).map(|s| Self::from_local(s))
+    }
+}
+
+impl<S: 'static + ?Sized + IInstance> IResolveGlobal for Instance<S> {
+    type Error = <S as IGlobal>::Error;
 
     #[inline]
     fn resolve(ctn: &mut ServiceContainer) -> Result<Self, Self::Error> {
-        ctn.resolve_singleton().map(|s| Self::from_singleton(s))
+        ctn.resolve_global().map(|s| Self::from_global(s))
     }
 }
 
-impl<S> IResolveLocal for Instance<S>
-where
-    S: 'static + IService,
-    S::Params: Default,
- {
-    #[inline]
-    fn resolve_local(ctn: &mut ServiceContainer) -> Result<Self, Self::Error> {
-        ctn.resolve_local_default().map(|l| Self::from_local(l))
-    }
-}
-
-impl<S: 'static + IService> IResolveSingleton for Instance<S> {
-    #[inline]
-    fn resolve_singleton(ctn: &mut ServiceContainer) -> Result<Self, Self::Error> {
-        ctn.resolve_singleton().map(|s| Self::from_singleton(s))
-    }
-}
-
-impl<S: IService> Instance<S> {
+impl<S: ?Sized + IInstance> Instance<S> {
     /// Creates an instance from a singleton pointer.
-    pub fn from_singleton(inner: Singleton<S>) -> Self {
-        Self::Singleton(inner.into_inner())
+    pub fn from_global(inner: Global<S>) -> Self {
+        Self::Global(inner)
     }
 
     /// Creates an instance from a local instance.
     pub fn from_local(inner: Local<S>) -> Self {
-        Self::Local(inner.into_inner())
+        Self::Local(inner)
     }
 
     /// Get access to the service.
@@ -308,7 +294,7 @@ impl<S: IService> Instance<S> {
         F: FnOnce(&S::Instance) -> U,
     {
         match self {
-            Self::Singleton(s) => s.access(accessor),
+            Self::Global(s) => s.access(accessor),
             Self::Local(l) => accessor(l),
         }
     }
@@ -320,19 +306,19 @@ impl<S: IService> Instance<S> {
         F: FnOnce(&mut S::Instance) -> U,
     {
         match self {
-            Self::Singleton(s) => s.access_mut(accessor),
+            Self::Global(s) => s.access_mut(accessor),
             Self::Local(l) => accessor(l),
         }
     }
 }
 
-impl<S: IService> From<Singleton<S>> for Instance<S> {
-    fn from(s: Singleton<S>) -> Self {
-        Self::from_singleton(s)
+impl<S: ?Sized + IInstance> From<Global<S>> for Instance<S> {
+    fn from(s: Global<S>) -> Self {
+        Self::from_global(s)
     }
 }
 
-impl<S: IService> From<Local<S>> for Instance<S> {
+impl<S: ?Sized + IInstance> From<Local<S>> for Instance<S> {
     fn from(l: Local<S>) -> Self {
         Self::from_local(l)
     }

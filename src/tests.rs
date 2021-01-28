@@ -15,8 +15,8 @@ impl IService for Service {
     type Error = ();
     // type DefaultInstance = Local<Service>;
 
-    fn new_singleton(_: &mut ServiceContainer) -> Result<Singleton<Self>, Self::Error> {
-        Ok(Singleton::new(Rc::new(RefCell::new(Service(100)))))
+    fn new_singleton(_: &mut ServiceContainer) -> Result<Global<Self>, Self::Error> {
+        Ok(Global::new(Rc::new(RefCell::new(Service(100)))))
     }
 
     fn new_local(_: &mut ServiceContainer, number: Self::Params) -> Result<Local<Self>, Self::Error> {
@@ -45,7 +45,7 @@ fn insert() {
 #[test]
 fn resolve_singleton_once() {
     let mut ctn = ServiceContainer::new();
-    let singleton = ctn.resolve_singleton::<Service>();
+    let singleton = ctn.resolve_global::<Service>();
     assert!(singleton.is_ok())
 }
 
@@ -72,9 +72,9 @@ fn resolve_singleton_multiple_times() {
     }
 
     let mut ctn = ServiceContainer::new();
-    let _singleton1 = ctn.resolve_singleton::<Service2>();
-    let _singleton2 = ctn.resolve_singleton::<Service2>();
-    let _singleton3 = ctn.resolve_singleton::<Service2>();
+    let _singleton1 = ctn.resolve_global::<Service2>();
+    let _singleton2 = ctn.resolve_global::<Service2>();
+    let _singleton3 = ctn.resolve_global::<Service2>();
     
     assert_eq!(ctn.inner_hashmap().len(), 1);
 

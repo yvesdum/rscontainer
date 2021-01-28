@@ -9,14 +9,14 @@ use std::sync::Arc;
 // Trait
 ///////////////////////////////////////////////////////////////////////////////
 
-/// A smart pointer that can be used to store a singleton instance.
+/// A smart pointer that can be used to store a global instance.
 ///
 /// # Safety
 ///
 /// This trait may only be implemented on reference counted pointers, such as
 /// `Rc` and `Arc`. It may not be implemented on `Box`, because it could lead
 /// to multiple boxes pointing to the same location.
-pub unsafe trait ISingletonPointer: Sized + Clone {
+pub unsafe trait IGlobalPointer: Sized + Clone {
     /// Transforms the smart pointer into a raw pointer.
     ///
     /// # Safety
@@ -62,8 +62,8 @@ pub unsafe trait ISingletonPointer: Sized + Clone {
     /// `ptr` should be created by the `into_ptr()` method of the 
     /// same impl block. This ensures that `ptr` has the same type as `Self`.
     ///
-    /// After this method `ptr` points to freed memory, so it should not
-    /// be used anymore.
+    /// After this method `ptr` points to possibly freed memory, so it should 
+    /// not be used anymore.
     unsafe fn drop(ptr: NonNull<()>) {
         drop_in_place(ptr.as_ptr())
     }
@@ -76,7 +76,7 @@ pub unsafe trait ISingletonPointer: Sized + Clone {
 // Implementations
 ///////////////////////////////////////////////////////////////////////////////
 
-unsafe impl<'r, T> ISingletonPointer for Rc<T> {
+unsafe impl<T> IGlobalPointer for Rc<T> {
     unsafe fn from_ptr(ptr: NonNull<()>) -> Self {
         Rc::from_raw(ptr.as_ptr() as *const T)
     }
@@ -91,7 +91,7 @@ unsafe impl<'r, T> ISingletonPointer for Rc<T> {
     }
 }
 
-unsafe impl<'r, T> ISingletonPointer for Arc<T> {
+unsafe impl<T> IGlobalPointer for Arc<T> {
     unsafe fn from_ptr(ptr: NonNull<()>) -> Self {
         Arc::from_raw(ptr.as_ptr() as *const T)
     }
