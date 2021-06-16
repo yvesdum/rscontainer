@@ -2,7 +2,7 @@
 
 use super::access::{Access, IAccess};
 use super::container::ServiceContainer;
-use super::getters::{Shared, Local};
+use super::getters::{Local, Shared};
 use super::pointers::ISharedPointer;
 use std::rc::Rc;
 
@@ -21,20 +21,20 @@ pub trait IShared {
     /// * `Arc<Mutex<T>>`
     /// * `Arc<RwLock<T>>`
     ///
-    /// Where `T` is equal to `Self::Access`. 
+    /// Where `T` is equal to `Self::Target`.
     ///
-    /// Use the [`Access`] wrapper if the type is read-only or already 
+    /// Use the [`Access`] wrapper if the type is read-only or already
     /// implements interior mutability.
     ///
     /// [`Access`]: crate::access::Access
-    type Pointer: ISharedPointer + IAccess<Target = Self::Access>;
+    type Pointer: ISharedPointer + IAccess<Target = Self::Target>;
 
     /// The type that is used to access the shared instance.
     ///
     /// This should be the type that the pointer eventually dereferences to.
-    type Access;
+    type Target;
 
-    /// The type of the error that can occur when constructing or resolving 
+    /// The type of the error that can occur when constructing or resolving
     /// this service.
     type Error;
 
@@ -53,7 +53,7 @@ pub trait ILocal {
     /// Optional parameters for the `construct` method.
     type Parameters;
 
-    /// The type of the error that can occur when constructing or resolving 
+    /// The type of the error that can occur when constructing or resolving
     /// this service.
     type Error;
 
@@ -75,12 +75,12 @@ pub trait IInstance: ILocal + IShared {}
 ///////////////////////////////////////////////////////////////////////////////
 
 /// IInstance is implemented for every service that implements `ILocal` and
-/// `IGlobal`. `ILocal::Instance` must be the same as `IGlobal::Access`.
-impl<S> IInstance for S where S: ILocal + IShared<Access = <S as ILocal>::Instance> {}
+/// `IGlobal`. `ILocal::Instance` must be the same as `IGlobal::Target`.
+impl<S> IInstance for S where S: ILocal + IShared<Target = <S as ILocal>::Instance> {}
 
 impl IShared for () {
     type Pointer = Rc<Access<()>>;
-    type Access = ();
+    type Target = ();
     type Error = ();
 
     fn construct(_: &mut ServiceContainer) -> Result<Shared<Self>, Self::Error> {
