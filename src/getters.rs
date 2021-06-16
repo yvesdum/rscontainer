@@ -78,21 +78,12 @@ impl<S: ?Sized + IShared> Shared<S> {
     }
 
     /// Get access to the shared instance through a closure.
-    pub fn access<U, F>(&self, accessor: F) -> U
-    where
-        S::Pointer: IAccess,
-        F: FnOnce(&<S::Pointer as IAccess>::Target) -> U,
-    {
-        self.inner.access(accessor)
-    }
-
-    /// Get access to the shared instance through a closure.
-    pub fn access_poisoned<U, F>(&self, f: F) -> U
+    pub fn access<U, F>(&self, f: F) -> U
     where
         S::Pointer: IAccess,
         F: FnOnce(Poisoning<&<S::Pointer as IAccess>::Target>) -> U,
     {
-        self.inner.access_poisoned(f)
+        self.inner.access(f)
     }
 
     /// Get access to the shared instance through a closure.
@@ -104,22 +95,13 @@ impl<S: ?Sized + IShared> Shared<S> {
         self.inner.try_access(f)
     }
 
-    /// Get mutable access to the shared instance.
-    pub fn access_mut<U, F>(&self, accessor: F) -> U
-    where
-        S::Pointer: IAccessMut,
-        F: FnOnce(&mut <S::Pointer as IAccess>::Target) -> U,
-    {
-        self.inner.access_mut(accessor)
-    }
-
     /// Get access to the shared instance through a closure.
-    pub fn access_poisoned_mut<U, F>(&self, f: F) -> U
+    pub fn access_mut<U, F>(&self, f: F) -> U
     where
         S::Pointer: IAccessMut,
         F: FnOnce(Poisoning<&mut <S::Pointer as IAccess>::Target>) -> U,
     {
-        self.inner.access_poisoned_mut(f)
+        self.inner.access_mut(f)
     }
 
     /// Get access to the shared instance through a closure.
@@ -298,26 +280,14 @@ impl<S: ?Sized + IInstance> Instance<S> {
         Self::Local(inner)
     }
 
-    /// Get access to the service.
-    pub fn access<U, F>(&self, accessor: F) -> U
-    where
-        S::Pointer: IAccess<Target = S::Instance>,
-        F: FnOnce(&S::Instance) -> U,
-    {
-        match self {
-            Self::Shared(s) => s.access(accessor),
-            Self::Local(l) => accessor(l),
-        }
-    }
-
     /// Get access to the shared instance through a closure.
-    pub fn access_poisoned<U, F>(&self, accessor: F) -> U
+    pub fn access<U, F>(&self, accessor: F) -> U
     where
         S::Pointer: IAccess<Target = S::Instance>,
         F: FnOnce(Poisoning<&S::Instance>) -> U,
     {
         match self {
-            Self::Shared(s) => s.access_poisoned(accessor),
+            Self::Shared(s) => s.access(accessor),
             Self::Local(l) => accessor(Poisoning::Healthy(l)),
         }
     }
@@ -334,26 +304,14 @@ impl<S: ?Sized + IInstance> Instance<S> {
         }
     }
 
-    /// Get mutable access to the service.
-    pub fn access_mut<U, F>(&mut self, accessor: F) -> U
-    where
-        S::Pointer: IAccessMut<Target = S::Instance>,
-        F: FnOnce(&mut S::Instance) -> U,
-    {
-        match self {
-            Self::Shared(s) => s.access_mut(accessor),
-            Self::Local(l) => accessor(l),
-        }
-    }
-    
     /// Get access to the shared instance through a closure.
-    pub fn access_poisoned_mut<U, F>(&mut self, accessor: F) -> U
+    pub fn access_mut<U, F>(&mut self, accessor: F) -> U
     where
         S::Pointer: IAccessMut<Target = S::Instance>,
         F: FnOnce(Poisoning<&mut S::Instance>) -> U,
     {
         match self {
-            Self::Shared(s) => s.access_poisoned_mut(accessor),
+            Self::Shared(s) => s.access_mut(accessor),
             Self::Local(l) => accessor(Poisoning::Healthy(l)),
         }
     }
