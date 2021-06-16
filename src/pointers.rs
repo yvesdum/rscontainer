@@ -105,3 +105,136 @@ unsafe impl<T> ISharedPointer for Arc<T> {
         Arc::ptr_eq(self, other)
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Tests
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rc_from_ptr() {
+        let rc = Rc::new(100u32);
+        let rc_ptr = Rc::into_raw(Rc::clone(&rc));
+
+        let rc_from_ptr: Rc<u32> = unsafe {
+            ISharedPointer::from_ptr(NonNull::new(rc_ptr as *mut _).unwrap())
+        };
+
+        assert!(Rc::ptr_eq(&rc_from_ptr, &rc));
+        assert_eq!(rc_from_ptr, rc);
+    }
+
+    #[test]
+    fn rc_into_ptr() {
+        let rc = Rc::new(100u32);
+        let rc_clone = Rc::clone(&rc);
+
+        let rc_ptr = Rc::into_raw(rc);
+        let rc_clone_ptr = unsafe {
+            ISharedPointer::into_ptr(rc_clone)
+        };
+
+        assert_eq!(rc_ptr, rc_clone_ptr.as_ptr() as *const _);
+    }
+
+    #[test]
+    fn rc_clone_from_ptr() {
+        let rc = Rc::new(100u32);
+
+        let ptr = unsafe {
+            ISharedPointer::into_ptr(rc)
+        };
+
+        let rc_clone: Rc<u32> = unsafe {
+            ISharedPointer::clone_from_ptr(ptr)
+        };
+
+        assert_eq!(Rc::strong_count(&rc_clone), 2);
+    }
+
+    #[test]
+    fn rc_drop_from_ptr() {
+        let rc = Rc::new(100u32);
+
+        let ptr = unsafe {
+            ISharedPointer::into_ptr(rc)
+        };
+
+        let rc_clone: Rc<u32> = unsafe {
+            ISharedPointer::clone_from_ptr(ptr)
+        };
+
+        assert_eq!(Rc::strong_count(&rc_clone), 2);
+
+        unsafe {
+            <Rc<u32> as ISharedPointer>::drop_from_ptr(ptr);
+        }
+
+        assert_eq!(Rc::strong_count(&rc_clone), 1);
+    }
+
+    #[test]
+    fn arc_from_ptr() {
+        let rc = Arc::new(100u32);
+        let rc_ptr = Arc::into_raw(Arc::clone(&rc));
+
+        let rc_from_ptr: Arc<u32> = unsafe {
+            ISharedPointer::from_ptr(NonNull::new(rc_ptr as *mut _).unwrap())
+        };
+
+        assert!(Arc::ptr_eq(&rc_from_ptr, &rc));
+        assert_eq!(rc_from_ptr, rc);
+    }
+
+    #[test]
+    fn arc_into_ptr() {
+        let rc = Arc::new(100u32);
+        let rc_clone = Arc::clone(&rc);
+
+        let rc_ptr = Arc::into_raw(rc);
+        let rc_clone_ptr = unsafe {
+            ISharedPointer::into_ptr(rc_clone)
+        };
+
+        assert_eq!(rc_ptr, rc_clone_ptr.as_ptr() as *const _);
+    }
+
+    #[test]
+    fn arc_clone_from_ptr() {
+        let rc = Arc::new(100u32);
+
+        let ptr = unsafe {
+            ISharedPointer::into_ptr(rc)
+        };
+
+        let rc_clone: Arc<u32> = unsafe {
+            ISharedPointer::clone_from_ptr(ptr)
+        };
+
+        assert_eq!(Arc::strong_count(&rc_clone), 2);
+    }
+
+    #[test]
+    fn arc_drop_from_ptr() {
+        let rc = Arc::new(100u32);
+
+        let ptr = unsafe {
+            ISharedPointer::into_ptr(rc)
+        };
+
+        let rc_clone: Arc<u32> = unsafe {
+            ISharedPointer::clone_from_ptr(ptr)
+        };
+
+        assert_eq!(Arc::strong_count(&rc_clone), 2);
+
+        unsafe {
+            <Arc<u32> as ISharedPointer>::drop_from_ptr(ptr);
+        }
+
+        assert_eq!(Arc::strong_count(&rc_clone), 1);
+    }
+}

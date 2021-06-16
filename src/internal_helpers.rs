@@ -17,9 +17,6 @@ pub(crate) struct SharedPtr {
 
 impl Drop for SharedPtr {
     fn drop(&mut self) {
-        #[cfg(test)]
-        println!("Dropping SharedPtr {:p}", self);
-
         unsafe { (self.dtor)(self.ptr) }
     }
 }
