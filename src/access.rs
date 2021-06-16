@@ -53,7 +53,7 @@ impl<S> Poisoning<S> {
 /// Provides access to a global instance.
 pub trait IAccess {
     /// The actual type of the instance.
-    type Target;
+    type Target: ?Sized;
 
     /// Tries to get access to the global instance through a closure.
     ///
@@ -73,7 +73,6 @@ pub trait IAccess {
     /// Get access to the global instance through a closure.
     ///
     /// Panics if the global instance is poisoned or already mutably borrowed.
-    #[track_caller]
     fn access<U, F: FnOnce(&Self::Target) -> U>(&self, f: F) -> U;
 }
 
@@ -97,7 +96,6 @@ pub trait IAccessMut: IAccess {
     /// Get mutable access to the global instance through a closure.
     ///
     /// Panics if the global instance is poisoned or already mutably borrowed.
-    #[track_caller]
     fn access_mut<U, F: FnOnce(&mut Self::Target) -> U>(&self, f: F) -> U;
 }
 
@@ -110,7 +108,7 @@ pub trait IAccessMut: IAccess {
 /// Note: this makes the type read-only.
 #[repr(transparent)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Access<T>(T);
+pub struct Access<T: ?Sized>(T);
 
 impl<T> Access<T> {
     /// Creates a new `Access` wrapper around some value.
@@ -149,7 +147,7 @@ impl<T> IAccess for Access<T> {
     }
 }
 
-impl<T> IAccess for RefCell<T> {
+impl<T: ?Sized> IAccess for RefCell<T> {
     type Target = T;
 
     fn try_access<U, F: FnOnce(Poisoning<&Self::Target>) -> U>(&self, f: F) -> Option<U> {
@@ -168,7 +166,7 @@ impl<T> IAccess for RefCell<T> {
     }
 }
 
-impl<T: Copy> IAccess for Cell<T> {
+impl<T: ?Sized + Copy> IAccess for Cell<T> {
     type Target = T;
 
     fn try_access<U, F: FnOnce(Poisoning<&Self::Target>) -> U>(&self, f: F) -> Option<U> {
@@ -184,7 +182,7 @@ impl<T: Copy> IAccess for Cell<T> {
     }
 }
 
-impl<T> IAccess for Mutex<T> {
+impl<T: ?Sized> IAccess for Mutex<T> {
     type Target = T;
 
     fn try_access<U, F: FnOnce(Poisoning<&Self::Target>) -> U>(&self, f: F) -> Option<U> {
@@ -207,7 +205,7 @@ impl<T> IAccess for Mutex<T> {
     }
 }
 
-impl<T> IAccess for RwLock<T> {
+impl<T: ?Sized> IAccess for RwLock<T> {
     type Target = T;
 
     fn try_access<U, F: FnOnce(Poisoning<&Self::Target>) -> U>(&self, f: F) -> Option<U> {
@@ -230,7 +228,7 @@ impl<T> IAccess for RwLock<T> {
     }
 }
 
-impl<T: IAccess> IAccess for Rc<T> {
+impl<T: ?Sized + IAccess> IAccess for Rc<T> {
     type Target = T::Target;
 
     fn try_access<U, F: FnOnce(Poisoning<&Self::Target>) -> U>(&self, f: F) -> Option<U> {
@@ -246,7 +244,7 @@ impl<T: IAccess> IAccess for Rc<T> {
     }
 }
 
-impl<T: IAccess> IAccess for Arc<T> {
+impl<T: ?Sized + IAccess> IAccess for Arc<T> {
     type Target = T::Target;
 
     fn try_access<U, F: FnOnce(Poisoning<&Self::Target>) -> U>(&self, f: F) -> Option<U> {
@@ -266,7 +264,7 @@ impl<T: IAccess> IAccess for Arc<T> {
 // IAccessMut Implementations
 ///////////////////////////////////////////////////////////////////////////////
 
-impl<T> IAccessMut for RefCell<T> {
+impl<T: ?Sized> IAccessMut for RefCell<T> {
     fn try_access_mut<U, F: FnOnce(Poisoning<&mut Self::Target>) -> U>(&self, f: F) -> Option<U> {
         match self.try_borrow_mut() {
             Ok(mut bor) => Some(f(Poisoning::Healthy(&mut bor))),
@@ -283,7 +281,7 @@ impl<T> IAccessMut for RefCell<T> {
     }
 }
 
-impl<T: Copy> IAccessMut for Cell<T> {
+impl<T: ?Sized + Copy> IAccessMut for Cell<T> {
     fn try_access_mut<U, F: FnOnce(Poisoning<&mut Self::Target>) -> U>(&self, f: F) -> Option<U> {
         let mut value = self.get();
         let output = f(Poisoning::Healthy(&mut value));
@@ -306,7 +304,7 @@ impl<T: Copy> IAccessMut for Cell<T> {
     }
 }
 
-impl<T> IAccessMut for Mutex<T> {
+impl<T: ?Sized> IAccessMut for Mutex<T> {
     fn try_access_mut<U, F: FnOnce(Poisoning<&mut Self::Target>) -> U>(&self, f: F) -> Option<U> {
         match self.try_lock() {
             Ok(mut lock) => Some(f(Poisoning::Healthy(&mut lock))),
@@ -329,7 +327,7 @@ impl<T> IAccessMut for Mutex<T> {
     }
 }
 
-impl<T> IAccessMut for RwLock<T> {
+impl<T: ?Sized> IAccessMut for RwLock<T> {
     fn try_access_mut<U, F: FnOnce(Poisoning<&mut Self::Target>) -> U>(&self, f: F) -> Option<U> {
         match self.try_write() {
             Ok(mut write) => Some(f(Poisoning::Healthy(&mut write))),
@@ -352,7 +350,7 @@ impl<T> IAccessMut for RwLock<T> {
     }
 }
 
-impl<T: IAccessMut> IAccessMut for Rc<T> {
+impl<T: ?Sized + IAccessMut> IAccessMut for Rc<T> {
     fn try_access_mut<U, F: FnOnce(Poisoning<&mut Self::Target>) -> U>(&self, f: F) -> Option<U> {
         self.deref().try_access_mut(f)
     }
@@ -366,7 +364,7 @@ impl<T: IAccessMut> IAccessMut for Rc<T> {
     }
 }
 
-impl<T: IAccessMut> IAccessMut for Arc<T> {
+impl<T: ?Sized + IAccessMut> IAccessMut for Arc<T> {
     fn try_access_mut<U, F: FnOnce(Poisoning<&mut Self::Target>) -> U>(&self, f: F) -> Option<U> {
         self.deref().try_access_mut(f)
     }

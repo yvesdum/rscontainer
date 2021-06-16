@@ -1,7 +1,7 @@
 //! Traits for type-erasing of shared pointers.
 
 use std::mem::ManuallyDrop;
-use std::ptr::{drop_in_place, NonNull};
+use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::Arc;
 

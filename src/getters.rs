@@ -1,6 +1,6 @@
 //! Wrapper types to get and store services.
 
-use super::access::{IAccess, IAccessMut};
+use super::access::{IAccess, IAccessMut, Poisoning};
 use super::container::ServiceContainer;
 use super::pointers::IGlobalPointer;
 use super::service_traits::{IGlobal, IInstance, ILocal};
@@ -25,20 +25,17 @@ pub trait IResolveLocal: Sized {
     type Parameters;
 
     /// Resolve the instance from the container.
-    fn resolve(
-        ctn: &mut ServiceContainer,
-        params: Self::Parameters,
-    ) -> Result<Self, Self::Error>;
+    fn resolve(ctn: &mut ServiceContainer, params: Self::Parameters) -> Result<Self, Self::Error>;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Singleton Instance
+// global instance Instance
 ///////////////////////////////////////////////////////////////////////////////
 
-/// A pointer to a singleton from the service container.
+/// A pointer to a global instance from the service container.
 #[repr(transparent)]
 pub struct Global<S: ?Sized + IGlobal> {
-    /// The actual smart pointer to the singleton instance.
+    /// The actual smart pointer to the global instance instance.
     inner: S::Pointer,
 }
 
@@ -52,12 +49,12 @@ impl<S: 'static + ?Sized + IGlobal> IResolveGlobal for Global<S> {
 }
 
 impl<S: ?Sized + IGlobal> Global<S> {
-    /// Creates a singleton from the inner smart pointer.
+    /// Creates a global instance from the inner smart pointer.
     pub fn new(inner: S::Pointer) -> Self {
         Self { inner }
     }
 
-    /// Returns the inner smart pointer of the singleton.
+    /// Returns the inner smart pointer of the global instance.
     pub fn into_inner(self) -> S::Pointer {
         self.inner
     }
@@ -72,15 +69,15 @@ impl<S: ?Sized + IGlobal> Global<S> {
         &mut self.inner
     }
 
-    /// Returns true if two singletons point to the same instance.
+    /// Returns true if two global instances point to the same instance.
     ///
-    /// Only compares the pointers, not the contents of the singletons,
+    /// Only compares the pointers, not the contents of the global instances,
     /// and is therefore always cheap.
     pub fn is(&self, other: &Self) -> bool {
         self.inner.ptr_eq(other.inner())
     }
 
-    /// Get access to the singleton.
+    /// Get access to the global instance through a closure.
     pub fn access<U, F>(&self, accessor: F) -> U
     where
         S::Pointer: IAccess,
@@ -89,13 +86,49 @@ impl<S: ?Sized + IGlobal> Global<S> {
         self.inner.access(accessor)
     }
 
-    /// Get mutable access to the singleton.
+    /// Get access to the global instance through a closure.
+    pub fn access_poisoned<U, F>(&self, f: F) -> U
+    where
+        S::Pointer: IAccess,
+        F: FnOnce(Poisoning<&<S::Pointer as IAccess>::Target>) -> U,
+    {
+        self.inner.access_poisoned(f)
+    }
+
+    /// Get access to the global instance through a closure.
+    pub fn try_access<U, F>(&self, f: F) -> Option<U>
+    where
+        S::Pointer: IAccess,
+        F: FnOnce(Poisoning<&<S::Pointer as IAccess>::Target>) -> U,
+    {
+        self.inner.try_access(f)
+    }
+
+    /// Get mutable access to the global instance.
     pub fn access_mut<U, F>(&self, accessor: F) -> U
     where
         S::Pointer: IAccessMut,
         F: FnOnce(&mut <S::Pointer as IAccess>::Target) -> U,
     {
         self.inner.access_mut(accessor)
+    }
+
+    /// Get access to the global instance through a closure.
+    pub fn access_poisoned_mut<U, F>(&self, f: F) -> U
+    where
+        S::Pointer: IAccessMut,
+        F: FnOnce(Poisoning<&mut <S::Pointer as IAccess>::Target>) -> U,
+    {
+        self.inner.access_poisoned_mut(f)
+    }
+
+    /// Get access to the global instance through a closure.
+    pub fn try_access_mut<U, F>(&self, f: F) -> Option<U>
+    where
+        S::Pointer: IAccessMut,
+        F: FnOnce(Poisoning<&mut <S::Pointer as IAccess>::Target>) -> U,
+    {
+        self.inner.try_access_mut(f)
     }
 }
 
@@ -111,7 +144,7 @@ where
 }
 
 impl<S: ?Sized + IGlobal> Clone for Global<S> {
-    /// Clones the pointer to the singleton instance.
+    /// Clones the pointer to the global instance instance.
     ///
     /// Only increases the reference count, so this is very cheap.
     /// See [`Rc::clone`] and [`Arc::clone`].
@@ -130,7 +163,7 @@ where
     S::Pointer: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Singleton")
+        f.debug_struct("global instance")
             .field("inner", &self.inner)
             .finish()
     }
@@ -155,10 +188,7 @@ where
     type Parameters = S::Parameters;
 
     #[inline]
-    fn resolve(
-        ctn: &mut ServiceContainer,
-        params: Self::Parameters,
-    ) -> Result<Self, Self::Error> {
+    fn resolve(ctn: &mut ServiceContainer, params: Self::Parameters) -> Result<Self, Self::Error> {
         ctn.resolve_local(params)
     }
 }
@@ -182,22 +212,6 @@ impl<S: ?Sized + ILocal> Local<S> {
     /// Returns a mutable reference to the inner instance.
     pub fn inner_mut(&mut self) -> &mut S::Instance {
         &mut self.inner
-    }
-
-    /// Get access to the local instance.
-    pub fn access<U, F>(&self, accessor: F) -> U
-    where
-        F: FnOnce(&S::Instance) -> U,
-    {
-        accessor(&self.inner)
-    }
-
-    /// Get mutable access to the local instance.
-    pub fn access_mut<U, F>(&mut self, accessor: F) -> U
-    where
-        F: FnOnce(&mut S::Instance) -> U,
-    {
-        accessor(&mut self.inner)
     }
 }
 
@@ -242,7 +256,7 @@ where
 // Any Kind Instance
 ///////////////////////////////////////////////////////////////////////////////
 
-/// Some instance of a service, either a singleton or local instance.
+/// Some instance of a service, either a global instance or local instance.
 ///
 /// Use this as a field, when you want the user to decide whether they want to
 /// supply a global or local instance.
@@ -259,10 +273,7 @@ where
     type Parameters = <S as ILocal>::Parameters;
 
     #[inline]
-    fn resolve(
-        ctn: &mut ServiceContainer,
-        params: Self::Parameters,
-    ) -> Result<Self, Self::Error> {
+    fn resolve(ctn: &mut ServiceContainer, params: Self::Parameters) -> Result<Self, Self::Error> {
         ctn.resolve_local(params).map(|s| Self::from_local(s))
     }
 }
@@ -277,7 +288,7 @@ impl<S: 'static + ?Sized + IInstance> IResolveGlobal for Instance<S> {
 }
 
 impl<S: ?Sized + IInstance> Instance<S> {
-    /// Creates an instance from a singleton pointer.
+    /// Creates an instance from a global instance pointer.
     pub fn from_global(inner: Global<S>) -> Self {
         Self::Global(inner)
     }
@@ -299,6 +310,30 @@ impl<S: ?Sized + IInstance> Instance<S> {
         }
     }
 
+    /// Get access to the global instance through a closure.
+    pub fn access_poisoned<U, F>(&self, accessor: F) -> U
+    where
+        S::Pointer: IAccess<Target = S::Instance>,
+        F: FnOnce(Poisoning<&S::Instance>) -> U,
+    {
+        match self {
+            Self::Global(s) => s.access_poisoned(accessor),
+            Self::Local(l) => accessor(Poisoning::Healthy(l)),
+        }
+    }
+
+    /// Get access to the global instance through a closure.
+    pub fn try_access<U, F>(&self, accessor: F) -> Option<U>
+    where
+        S::Pointer: IAccess<Target = S::Instance>,
+        F: FnOnce(Poisoning<&S::Instance>) -> U,
+    {
+        match self {
+            Self::Global(s) => s.try_access(accessor),
+            Self::Local(l) => Some(accessor(Poisoning::Healthy(l))),
+        }
+    }
+
     /// Get mutable access to the service.
     pub fn access_mut<U, F>(&mut self, accessor: F) -> U
     where
@@ -308,6 +343,30 @@ impl<S: ?Sized + IInstance> Instance<S> {
         match self {
             Self::Global(s) => s.access_mut(accessor),
             Self::Local(l) => accessor(l),
+        }
+    }
+    
+    /// Get access to the global instance through a closure.
+    pub fn access_poisoned_mut<U, F>(&mut self, accessor: F) -> U
+    where
+        S::Pointer: IAccessMut<Target = S::Instance>,
+        F: FnOnce(Poisoning<&mut S::Instance>) -> U,
+    {
+        match self {
+            Self::Global(s) => s.access_poisoned_mut(accessor),
+            Self::Local(l) => accessor(Poisoning::Healthy(l)),
+        }
+    }
+
+    /// Get access to the global instance through a closure.
+    pub fn try_access_mut<U, F>(&mut self, accessor: F) -> Option<U>
+    where
+        S::Pointer: IAccessMut<Target = S::Instance>,
+        F: FnOnce(Poisoning<&mut S::Instance>) -> U,
+    {
+        match self {
+            Self::Global(s) => s.try_access_mut(accessor),
+            Self::Local(l) => Some(accessor(Poisoning::Healthy(l))),
         }
     }
 }

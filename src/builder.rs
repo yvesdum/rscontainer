@@ -34,35 +34,35 @@ impl ContainerBuilder {
     }
 
     /// Inserts a global instance.
-    pub fn with_global<S: 'static + ?Sized + IGlobal>(&mut self, global: Global<S>) -> &mut Self {
+    pub fn with_global<S: 'static + ?Sized + IGlobal>(mut self, global: Global<S>) -> Self {
         self.entry(TypeId::of::<S>()).global_ptr = Some(GlobalPtr::new(global.into_inner()));
         self
     }
 
     /// Sets a custom constructor for a global instance.
     pub fn with_global_constructor<S: 'static + ?Sized + IGlobal>(
-        &mut self,
+        mut self,
         ctor: GlobalCtor<S>,
-    ) -> &mut Self {
+    ) -> Self {
         self.entry(TypeId::of::<S>()).global_ctor = Some(unsafe { std::mem::transmute(ctor) });
         self
     }
 
     /// Sets a custom constructor for a local instance.
     pub fn with_local_constructor<S: 'static + ?Sized + ILocal>(
-        &mut self,
+        mut self,
         ctor: LocalCtor<S>,
-    ) -> &mut Self {
+    ) -> Self {
         self.entry(TypeId::of::<S>()).local_ctor = Some(unsafe { std::mem::transmute(ctor) });
         self
     }
 
     /// Sets custom contructors for a local and global intance.
     pub fn with_constructors<S: 'static + ?Sized + ILocal + IGlobal>(
-        &mut self,
+        mut self,
         local: LocalCtor<S>,
         global: GlobalCtor<S>,
-    ) -> &mut Self {
+    ) -> Self {
         let mut entry = self.entry(TypeId::of::<S>());
         entry.global_ctor = Some(unsafe { std::mem::transmute(global) });
         entry.local_ctor = Some(unsafe { std::mem::transmute(local) });
