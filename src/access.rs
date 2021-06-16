@@ -11,14 +11,17 @@ use std::sync::{Arc, Mutex, RwLock, TryLockError};
 
 /// Indicates whether an instance is poisoned or not.
 ///
-/// More information about poisoning: 
-/// [https://doc.rust-lang.org/nomicon/poisoning.html].
+/// More information about poisoning in the [Nomicon].
 ///
 /// How to use this:
 /// * For pointer types that don't support poisoning, use [`assert_healthy`].
 /// * When it's a hard bug if the value is poisoned, use [`assert_healthy`].
 /// * When poisoning status doesn't matter, use [`assume_healthy`].
 /// * When you need different logic for poisoned or not, use a match statement.
+///
+/// [Nomicon]: https://doc.rust-lang.org/nomicon/poisoning.html
+/// [`assert_healthy`]: Poisoning::assert_healthy
+/// [`assume_healthy`]: Poisoning::assume_healthy
 pub enum Poisoning<S> {
     /// The instance is not poisoned, program flow can continue as usual.
     Healthy(S),
@@ -45,6 +48,8 @@ impl<S> Poisoning<S> {
     ///
     /// Only use this if you're certain that it doesn't matter if the value
     /// is poisoned.
+    ///
+    /// [`assert_healthy`]: Poisoning::assert_healthy
     pub fn assume_healthy(self) -> S {
         match self {
             Self::Healthy(value) => value,
@@ -53,11 +58,15 @@ impl<S> Poisoning<S> {
     }
 
     /// Returns `true` if the instance is [`Healthy`].
+    ///
+    /// [`Healthy`]: Poisoning::Healthy
     pub const fn is_healthy(&self) -> bool {
         matches!(self, Self::Healthy(..))
     }
 
     /// Returns `true` if the instance is [`Poisoned`].
+    ///
+    /// [`Poisoned`]: Poisoning::Poisoned
     pub const fn is_poisoned(&self) -> bool {
         matches!(self, Self::Poisoned(..))
     }
