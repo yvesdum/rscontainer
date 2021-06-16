@@ -4,7 +4,7 @@ use crate::internal_helpers::{LocalCtor, SharedCtor, SharedPtr, TypeErasedServic
 use crate::pointers::ISharedPointer;
 use crate::service_traits::{ILocal, IShared};
 use crate::{
-    getters::{IResolveLocal, IResolveShared, Local, Shared},
+    getters::{IResolveLocal, IResolveShared, Shared},
     ContainerBuilder,
 };
 use fnv::FnvHashMap;
@@ -61,26 +61,34 @@ impl ServiceContainer {
     /// Inserts a shared instance.
     ///
     /// Panics if the instance already exists, because it is not allowed to
-    /// mutate the container after it is built.
-    pub fn insert<S: 'static + ?Sized + IShared>(&mut self, instance: Shared<S>) {
+    /// mutate the container in such a way that other services will be 
+    /// shadowed.
+    pub fn insert<S: 'static + ?Sized + IShared>(&mut self, instance: S::Pointer) {
         let entry = self.services.entry(TypeId::of::<S>()).or_default();
         assert!(entry.shared_ptr.is_none());
-        entry.shared_ptr = Some(SharedPtr::new(instance.into_inner()));
+        entry.shared_ptr = Some(SharedPtr::new(instance));
     }
 
     ///////////////////////////////////////////////////////////////////////////
     // Generic Resolve Methods
     ///////////////////////////////////////////////////////////////////////////
 
-    /// Resolves a `Shared` or `Instance::Shared`.
+    /// Resolves a [`Shared`] or [`Instance::Shared`].
+    ///
+    /// [`Instance::Shared`]: crate::Instance::Shared
     #[inline]
     pub fn shared<R: IResolveShared>(&mut self) -> Result<R, R::Error> {
         R::resolve(self)
     }
 
-    /// Resolves a `Local` or `Instance::Local`.
+    /// Resolves a local instance or [`Instance::Local`].
+    ///
+    /// [`Instance::Local`]: crate::Instance::Local
     #[inline]
-    pub fn local<R: IResolveLocal>(&mut self, params: R::Parameters) -> Result<R, R::Error> {
+    pub fn local<R: IResolveLocal>(
+        &mut self,
+        params: R::Parameters,
+    ) -> Result<R::Instance, R::Error> {
         R::resolve(self, params)
     }
 
@@ -98,7 +106,7 @@ impl ServiceContainer {
             }) => unsafe {
                 // SAFETY: because the TypeId is the key, we're certain
                 // that we're casting to the right type.
-                Shared::new(S::Pointer::clone_from_ptr(ptr.ptr))
+                S::Pointer::clone_from_ptr(ptr.ptr)
             },
 
             // There's no instance, but there is a custom constructor.
@@ -110,7 +118,7 @@ impl ServiceContainer {
                 // that we're casting to the right type.
                 let ctor: SharedCtor<S> = std::mem::transmute(*ctor);
                 let instance = ctor(self)?;
-                self.insert(instance.clone());
+                self.insert::<S>(instance.clone());
                 instance
             },
 
@@ -118,20 +126,21 @@ impl ServiceContainer {
             // default constructor.
             _ => {
                 let instance = S::construct(self)?;
-                self.insert(instance.clone());
+                self.insert::<S>(instance.clone());
                 instance
             }
         };
 
-        S::resolved(&instance, self);
-        Ok(instance)
+        let shared = Shared::new(instance);
+        S::resolved(&shared, self);
+        Ok(shared)
     }
 
     /// Resolves a local instance.
     pub fn resolve_local<S: 'static + ?Sized + ILocal>(
         &mut self,
         params: S::Parameters,
-    ) -> Result<Local<S>, S::Error> {
+    ) -> Result<S::Instance, S::Error> {
         let mut local = match self.services.get(&TypeId::of::<S>()) {
             // There is a custom constructor registered.
             Some(TypeErasedService {
@@ -167,8 +176,8 @@ mod tests {
         type Target = u32;
         type Error = ();
 
-        fn construct(_: &mut ServiceContainer) -> Result<Shared<Self>, Self::Error> {
-            Ok(Shared::new(Rc::new(Access::new(1234))))
+        fn construct(_: &mut ServiceContainer) -> Result<Self::Pointer, Self::Error> {
+            Ok(Rc::new(Access::new(1234)))
         }
     }
 
@@ -176,12 +185,12 @@ mod tests {
         type Instance = u32;
         type Parameters = ();
         type Error = ();
-    
+
         fn construct(
             _: &mut ServiceContainer,
             _: Self::Parameters,
-        ) -> Result<Local<Self>, Self::Error> {
-            Ok(Local::new(2468))
+        ) -> Result<Self::Instance, Self::Error> {
+            Ok(2468)
         }
     }
 
@@ -192,7 +201,7 @@ mod tests {
         type Target = Failing;
         type Error = &'static str;
 
-        fn construct(_: &mut ServiceContainer) -> Result<Shared<Self>, Self::Error> {
+        fn construct(_: &mut ServiceContainer) -> Result<Self::Pointer, Self::Error> {
             Err("error123")
         }
     }
@@ -201,11 +210,11 @@ mod tests {
         type Instance = Failing;
         type Parameters = ();
         type Error = &'static str;
-    
+
         fn construct(
             _: &mut ServiceContainer,
             _: Self::Parameters,
-        ) -> Result<Local<Self>, Self::Error> {
+        ) -> Result<Self::Instance, Self::Error> {
             Err("error456")
         }
     }
@@ -231,7 +240,7 @@ mod tests {
     #[test]
     fn insert() {
         let mut ctn = ServiceContainer::new();
-        let instance = Shared::new(Rc::new(Access::new(())));
+        let instance = Rc::new(Access::new(()));
         ctn.insert::<()>(instance);
 
         assert_eq!(ctn.inner().len(), 1);
@@ -240,12 +249,12 @@ mod tests {
     #[test]
     fn resolve_inserted() {
         let mut ctn = ServiceContainer::new();
-        let instance = Shared::new(Rc::new(Access::new(())));
-        let instance_clone = Clone::clone(&instance);
+        let instance = Rc::new(Access::new(()));
+        let instance_clone = Rc::clone(&instance);
         ctn.insert::<()>(instance);
         let instance_resolved: Shared<()> = ctn.shared().unwrap();
         assert!(Rc::ptr_eq(
-            instance_clone.inner(),
+            &instance_clone,
             instance_resolved.inner()
         ));
     }
@@ -253,7 +262,7 @@ mod tests {
     #[test]
     fn resolve_shared_returns_same_instance() {
         let mut ctn = ServiceContainer::new();
-        let instance = Shared::new(Rc::new(Access::new(())));
+        let instance = Rc::new(Access::new(()));
         ctn.insert::<()>(instance);
         let instance_resolved: Shared<()> = ctn.shared().unwrap();
         let instance_resolved_2: Shared<()> = ctn.shared().unwrap();
@@ -266,7 +275,7 @@ mod tests {
     #[test]
     fn resolve_shared_increases_ref_count() {
         let mut ctn = ServiceContainer::new();
-        let instance = Shared::new(Rc::new(Access::new(())));
+        let instance = Rc::new(Access::new(()));
         ctn.insert::<()>(instance);
 
         let instance_resolved: Shared<()> = ctn.shared().unwrap();
@@ -282,15 +291,15 @@ mod tests {
     #[test]
     fn container_drop_decreases_ref_count() {
         let mut ctn = ServiceContainer::new();
-        let instance = Shared::new(Rc::new(Access::new(())));
-        let instance_clone = Clone::clone(&instance);
+        let instance = Rc::new(Access::new(()));
+        let instance_clone = Rc::clone(&instance);
         ctn.insert::<()>(instance);
 
-        assert_eq!(Rc::strong_count(instance_clone.inner()), 2);
+        assert_eq!(Rc::strong_count(&instance_clone), 2);
 
         drop(ctn);
 
-        assert_eq!(Rc::strong_count(instance_clone.inner()), 1);
+        assert_eq!(Rc::strong_count(&instance_clone), 1);
     }
 
     #[test]
@@ -303,9 +312,9 @@ mod tests {
     #[test]
     fn resolve_shared_custom_constructor() {
         let mut ctn = ServiceContainer::builder()
-            .with_shared_constructor::<u32>(|_| Ok(Shared::new(Rc::new(Access::new(5678)))))
+            .with_shared_constructor::<u32>(|_| Ok(Rc::new(Access::new(5678))))
             .build();
-        
+
         let instance: Shared<u32> = ctn.shared().unwrap();
         assert_eq!(***instance.inner(), 5678);
     }
@@ -337,35 +346,35 @@ mod tests {
     #[test]
     fn resolve_local() {
         let mut ctn = ServiceContainer::new();
-        let instance: Local<u32> = ctn.local(()).unwrap();
-        assert_eq!(*instance, 2468);
+        let instance = ctn.local::<u32>(()).unwrap();
+        assert_eq!(instance, 2468);
     }
 
     #[test]
     fn resolve_local_custom_constructor() {
         let mut ctn = ServiceContainer::builder()
-            .with_local_constructor::<u32>(|_, _| Ok(Local::new(1357)))
+            .with_local_constructor::<u32>(|_, _| Ok(1357))
             .build();
 
-        let instance: Local<u32> = ctn.local(()).unwrap();
-        assert_eq!(*instance, 1357);
+        let instance = ctn.local::<u32>(()).unwrap();
+        assert_eq!(instance, 1357);
     }
 
     #[test]
     fn resolve_local_custom_constructor_twice() {
         let mut ctn = ServiceContainer::builder()
-            .with_local_constructor::<u32>(|_, _| Ok(Local::new(1357)))
+            .with_local_constructor::<u32>(|_, _| Ok(1357))
             .build();
 
-        let instance: Local<u32> = ctn.local(()).unwrap();
-        let instance_2: Local<u32> = ctn.local(()).unwrap();
-        assert_eq!(*instance, *instance_2);
+        let instance = ctn.local::<u32>(()).unwrap();
+        let instance_2 = ctn.local::<u32>(()).unwrap();
+        assert_eq!(instance, instance_2);
     }
 
     #[test]
     fn resolve_local_failing() {
         let mut ctn = ServiceContainer::new();
-        let result: Result<Local<Failing>, _> = ctn.local(());
+        let result = ctn.local::<Failing>(());
         assert!(matches!(result, Err("error456")));
     }
 
@@ -375,7 +384,7 @@ mod tests {
             .with_local_constructor::<u32>(|_, _| Err(()))
             .build();
 
-        let result: Result<Local<u32>, _> = ctn.local(());
+        let result = ctn.local::<u32>(());
         assert!(matches!(result, Err(())));
     }
 }

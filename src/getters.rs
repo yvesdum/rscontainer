@@ -3,9 +3,9 @@
 use super::access::{IAccess, IAccessMut, Poisoning};
 use super::container::ServiceContainer;
 use super::pointers::ISharedPointer;
-use super::service_traits::{IShared, IInstance, ILocal};
+use super::service_traits::{IInstance, ILocal, IShared};
 use std::fmt;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Helper Traits
@@ -23,9 +23,29 @@ pub trait IResolveShared: Sized {
 pub trait IResolveLocal: Sized {
     type Error;
     type Parameters;
+    type Instance;
 
     /// Resolve the instance from the container.
-    fn resolve(ctn: &mut ServiceContainer, params: Self::Parameters) -> Result<Self, Self::Error>;
+    fn resolve(
+        ctn: &mut ServiceContainer,
+        params: Self::Parameters,
+    ) -> Result<Self::Instance, Self::Error>;
+}
+
+impl<T> IResolveLocal for T
+where
+    T: ILocal + 'static,
+{
+    type Error = T::Error;
+    type Parameters = T::Parameters;
+    type Instance = T::Instance;
+
+    fn resolve(
+        ctn: &mut ServiceContainer,
+        params: Self::Parameters,
+    ) -> Result<Self::Instance, Self::Error> {
+        ctn.resolve_local::<T>(params)
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -152,89 +172,6 @@ where
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Local Instance
-///////////////////////////////////////////////////////////////////////////////
-
-/// A local instance of a service.
-#[repr(transparent)]
-pub struct Local<S: ?Sized + ILocal> {
-    /// The actual instance of the service.
-    inner: S::Instance,
-}
-
-impl<S: 'static + ?Sized + ILocal> IResolveLocal for Local<S>
-where
-    S::Parameters: Default,
-{
-    type Error = S::Error;
-    type Parameters = S::Parameters;
-
-    #[inline]
-    fn resolve(ctn: &mut ServiceContainer, params: Self::Parameters) -> Result<Self, Self::Error> {
-        ctn.resolve_local(params)
-    }
-}
-
-impl<S: ?Sized + ILocal> Local<S> {
-    /// Creates a local service from the inner instance.
-    pub fn new(inner: S::Instance) -> Self {
-        Self { inner }
-    }
-
-    /// Returns the inner instance of the local service.
-    pub fn into_inner(self) -> S::Instance {
-        self.inner
-    }
-
-    /// Returns a reference to the inner instance.
-    pub fn inner(&self) -> &S::Instance {
-        &self.inner
-    }
-
-    /// Returns a mutable reference to the inner instance.
-    pub fn inner_mut(&mut self) -> &mut S::Instance {
-        &mut self.inner
-    }
-}
-
-impl<S: ?Sized + ILocal> Deref for Local<S> {
-    type Target = S::Instance;
-
-    fn deref(&self) -> &Self::Target {
-        self.inner()
-    }
-}
-
-impl<S: ?Sized + ILocal> DerefMut for Local<S> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner_mut()
-    }
-}
-
-impl<S: ?Sized + ILocal> Clone for Local<S>
-where
-    S::Instance: Clone,
-{
-    /// Clones the instance of the service.
-    ///
-    /// This might be expensive, depending on the service.
-    fn clone(&self) -> Self {
-        Local {
-            inner: self.inner.clone(),
-        }
-    }
-}
-
-impl<S: ?Sized + ILocal> fmt::Debug for Local<S>
-where
-    S::Instance: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Local").field("inner", &self.inner).finish()
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////
 // Any Kind Instance
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -244,7 +181,7 @@ where
 /// supply a shared or local instance.
 pub enum Instance<S: ?Sized + IInstance> {
     Shared(Shared<S>),
-    Local(Local<S>),
+    Local(S::Instance),
 }
 
 impl<S: 'static + ?Sized + IInstance> IResolveLocal for Instance<S>
@@ -253,10 +190,11 @@ where
 {
     type Error = <S as ILocal>::Error;
     type Parameters = <S as ILocal>::Parameters;
+    type Instance = Self;
 
     #[inline]
     fn resolve(ctn: &mut ServiceContainer, params: Self::Parameters) -> Result<Self, Self::Error> {
-        ctn.resolve_local(params).map(|s| Self::from_local(s))
+        ctn.resolve_local::<S>(params).map(|s| Self::from_local(s))
     }
 }
 
@@ -276,7 +214,7 @@ impl<S: ?Sized + IInstance> Instance<S> {
     }
 
     /// Creates an instance from a local instance.
-    pub fn from_local(inner: Local<S>) -> Self {
+    pub fn from_local(inner: S::Instance) -> Self {
         Self::Local(inner)
     }
 
@@ -332,12 +270,6 @@ impl<S: ?Sized + IInstance> Instance<S> {
 impl<S: ?Sized + IInstance> From<Shared<S>> for Instance<S> {
     fn from(s: Shared<S>) -> Self {
         Self::from_shared(s)
-    }
-}
-
-impl<S: ?Sized + IInstance> From<Local<S>> for Instance<S> {
-    fn from(l: Local<S>) -> Self {
-        Self::from_local(l)
     }
 }
 

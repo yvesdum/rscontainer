@@ -2,7 +2,7 @@
 
 use super::access::{Access, IAccess};
 use super::container::ServiceContainer;
-use super::getters::{Local, Shared};
+use super::getters::Shared;
 use super::pointers::ISharedPointer;
 use std::rc::Rc;
 
@@ -39,7 +39,7 @@ pub trait IShared {
     type Error;
 
     /// Constructs an instance of the shared service.
-    fn construct(ctn: &mut ServiceContainer) -> Result<Shared<Self>, Self::Error>;
+    fn construct(ctn: &mut ServiceContainer) -> Result<Self::Pointer, Self::Error>;
 
     /// Called each time after the service is resolved from the container.
     fn resolved(_this: &Shared<Self>, _ctn: &mut ServiceContainer) {}
@@ -61,7 +61,7 @@ pub trait ILocal {
     fn construct(
         ctn: &mut ServiceContainer,
         params: Self::Parameters,
-    ) -> Result<Local<Self>, Self::Error>;
+    ) -> Result<Self::Instance, Self::Error>;
 
     /// Called each time after the service is resolved from the container.
     fn resolved(_this: &mut Self::Instance, _ctn: &mut ServiceContainer) {}
@@ -83,8 +83,8 @@ impl IShared for () {
     type Target = ();
     type Error = ();
 
-    fn construct(_: &mut ServiceContainer) -> Result<Shared<Self>, Self::Error> {
-        Ok(Shared::new(Rc::new(Access::new(()))))
+    fn construct(_: &mut ServiceContainer) -> Result<Self::Pointer, Self::Error> {
+        Ok(Rc::new(Access::new(())))
     }
 }
 
@@ -93,10 +93,7 @@ impl ILocal for () {
     type Parameters = ();
     type Error = ();
 
-    fn construct(
-        _: &mut ServiceContainer,
-        _: Self::Parameters,
-    ) -> Result<Local<Self>, Self::Error> {
-        Ok(Local::new(()))
+    fn construct(_: &mut ServiceContainer, _: Self::Parameters) -> Result<Self, Self::Error> {
+        Ok(())
     }
 }

@@ -20,13 +20,13 @@ mod service_traits;
 pub use self::access::{Access, Poisoning};
 pub use self::builder::ContainerBuilder;
 pub use self::container::ServiceContainer;
-pub use self::getters::{Shared, Instance, Local};
-pub use self::service_traits::{IShared, ILocal};
+pub use self::getters::{Instance, Shared};
+pub use self::service_traits::{ILocal, IShared};
 
 /// Types for extending the functionality of rscontainer.
 pub mod internals {
     pub use crate::access::{IAccess, IAccessMut};
-    pub use crate::getters::{IResolveShared, IResolveLocal};
+    pub use crate::getters::{IResolveLocal, IResolveShared};
     pub use crate::pointers::ISharedPointer;
 }
 

@@ -91,7 +91,6 @@ mod tests {
     use super::*;
     use std::rc::Rc;
     use crate::Access;
-    use crate::Local;
 
     #[test]
     fn new() {
@@ -143,11 +142,11 @@ mod tests {
     fn with_shared_constructor() {
         let mut ctn = ContainerBuilder::new();
 
-        fn ctor(_: &mut ServiceContainer) -> Result<Shared<u32>, ()> {
-            Ok(Shared::new(Rc::new(Access::new(456))))
+        fn ctor(_: &mut ServiceContainer) -> Result<Rc<Access<u32>>, ()> {
+            Ok(Rc::new(Access::new(456)))
         }
 
-        ctn = ctn.with_shared_constructor(ctor);
+        ctn = ctn.with_shared_constructor::<u32>(ctor);
 
         assert_eq!(ctn.inner().len(), 1);
 
@@ -163,11 +162,11 @@ mod tests {
     fn with_local_constructor() {
         let mut ctn = ContainerBuilder::new();
 
-        fn ctor(_: &mut ServiceContainer) -> Result<Shared<u32>, ()> {
-            Ok(Shared::new(Rc::new(Access::new(456))))
+        fn ctor(_: &mut ServiceContainer, _: ()) -> Result<u32, ()> {
+            Ok(456)
         }
 
-        ctn = ctn.with_shared_constructor(ctor);
+        ctn = ctn.with_local_constructor::<u32>(ctor);
 
         assert_eq!(ctn.inner().len(), 1);
 
@@ -175,7 +174,7 @@ mod tests {
 
         assert_eq!(
             ctor as *const (),
-            *entry.shared_ctor.as_ref().unwrap() as *const ()
+            *entry.local_ctor.as_ref().unwrap() as *const ()
         );
     }
 
@@ -183,15 +182,15 @@ mod tests {
     fn with_constructors() {
         let mut ctn = ContainerBuilder::new();
 
-        fn shared_ctor(_: &mut ServiceContainer) -> Result<Shared<u32>, ()> {
-            Ok(Shared::new(Rc::new(Access::new(456))))
+        fn shared_ctor(_: &mut ServiceContainer) -> Result<Rc<Access<u32>>, ()> {
+            Ok(Rc::new(Access::new(456)))
         }
 
-        fn local_ctor(_: &mut ServiceContainer, _: ()) -> Result<Local<u32>, ()> {
-            Ok(Local::new(456))
+        fn local_ctor(_: &mut ServiceContainer, _: ()) -> Result<u32, ()> {
+            Ok(456)
         }
 
-        ctn = ctn.with_constructors(local_ctor, shared_ctor);
+        ctn = ctn.with_constructors::<u32>(local_ctor, shared_ctor);
 
         assert_eq!(ctn.inner().len(), 1);
 
