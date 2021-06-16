@@ -28,6 +28,13 @@ impl ContainerBuilder {
         }
     }
 
+    /// Returns the inner hashmap for testing purposes.
+    #[cfg(test)]
+    #[allow(unused)]
+    fn inner(&self) -> &FnvHashMap<TypeId, TypeErasedService> {
+        &self.services
+    }
+
     /// Returns an entry in the service container.
     fn entry(&mut self, key: TypeId) -> &mut TypeErasedService {
         self.services.entry(key).or_default()
@@ -72,5 +79,132 @@ impl ContainerBuilder {
     /// Builds the container.
     pub fn build(self) -> ServiceContainer {
         ServiceContainer::new_built(self.services)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Tests
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::rc::Rc;
+    use crate::Access;
+    use crate::Local;
+
+    #[test]
+    fn new() {
+        let ctn = ContainerBuilder::new();
+        assert_eq!(ctn.inner().capacity(), 0);
+    }
+
+    #[test]
+    fn with_capacity() {
+        let ctn = ContainerBuilder::with_capacity(50);
+        assert!(ctn.inner().capacity() >= 50);
+
+        let ctn = ContainerBuilder::with_capacity(1350);
+        assert!(ctn.inner().capacity() >= 1350);
+
+        let ctn = ContainerBuilder::with_capacity(24);
+        assert!(ctn.inner().capacity() >= 24);
+    }
+
+    #[test]
+    fn entry() {
+        let mut ctn = ContainerBuilder::new();
+        let entry = ctn.entry(TypeId::of::<()>());
+
+        assert!(entry.shared_ptr.is_none());
+        assert!(entry.shared_ctor.is_none());
+        assert!(entry.local_ctor.is_none());
+    }
+
+    #[test]
+    fn with_shared() {
+        let mut ctn = ContainerBuilder::new();
+
+        let shared = Shared::<u32>::new(Rc::new(Access::new(100)));
+        let shared_clone = shared.clone();
+        ctn = ctn.with_shared(shared);
+
+        assert_eq!(ctn.inner().len(), 1);
+
+        let entry = ctn.entry(TypeId::of::<u32>());
+
+        assert_eq!(
+            Rc::as_ptr(shared_clone.inner()) as *const (),
+            entry.shared_ptr.as_ref().unwrap().ptr.as_ptr() as *const ()
+        );
+    }
+
+    #[test]
+    fn with_shared_constructor() {
+        let mut ctn = ContainerBuilder::new();
+
+        fn ctor(_: &mut ServiceContainer) -> Result<Shared<u32>, ()> {
+            Ok(Shared::new(Rc::new(Access::new(456))))
+        }
+
+        ctn = ctn.with_shared_constructor(ctor);
+
+        assert_eq!(ctn.inner().len(), 1);
+
+        let entry = ctn.entry(TypeId::of::<u32>());
+
+        assert_eq!(
+            ctor as *const (),
+            *entry.shared_ctor.as_ref().unwrap() as *const ()
+        );
+    }
+    
+    #[test]
+    fn with_local_constructor() {
+        let mut ctn = ContainerBuilder::new();
+
+        fn ctor(_: &mut ServiceContainer) -> Result<Shared<u32>, ()> {
+            Ok(Shared::new(Rc::new(Access::new(456))))
+        }
+
+        ctn = ctn.with_shared_constructor(ctor);
+
+        assert_eq!(ctn.inner().len(), 1);
+
+        let entry = ctn.entry(TypeId::of::<u32>());
+
+        assert_eq!(
+            ctor as *const (),
+            *entry.shared_ctor.as_ref().unwrap() as *const ()
+        );
+    }
+
+    #[test]
+    fn with_constructors() {
+        let mut ctn = ContainerBuilder::new();
+
+        fn shared_ctor(_: &mut ServiceContainer) -> Result<Shared<u32>, ()> {
+            Ok(Shared::new(Rc::new(Access::new(456))))
+        }
+
+        fn local_ctor(_: &mut ServiceContainer, _: ()) -> Result<Local<u32>, ()> {
+            Ok(Local::new(456))
+        }
+
+        ctn = ctn.with_constructors(local_ctor, shared_ctor);
+
+        assert_eq!(ctn.inner().len(), 1);
+
+        let entry = ctn.entry(TypeId::of::<u32>());
+
+        assert_eq!(
+            shared_ctor as *const (),
+            *entry.shared_ctor.as_ref().unwrap() as *const ()
+        );
+
+        assert_eq!(
+            local_ctor as *const (),
+            *entry.local_ctor.as_ref().unwrap() as *const ()
+        );
     }
 }

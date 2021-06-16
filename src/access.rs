@@ -346,3 +346,60 @@ impl<T: ?Sized + IAccessMut> IAccessMut for Arc<T> {
         self.deref().access_mut(f)
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Tests
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn poisoning_assert_healthy() {
+        let poison = Poisoning::Healthy(321);
+        let value = poison.assert_healthy();
+        assert_eq!(value, 321);
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn poisoning_assert_healthy_panic() {
+        let poison = Poisoning::Poisoned(100);
+        let _value = poison.assert_healthy();
+    }
+
+    #[test]
+    fn poisoning_assume_healthy() {
+        let poison = Poisoning::Healthy(321);
+        let value = poison.assume_healthy();
+        assert_eq!(value, 321);
+
+        let poison = Poisoning::Poisoned(123);
+        let value = poison.assume_healthy();
+        assert_eq!(value, 123);
+    }
+
+    #[test]
+    fn poisoning_is_poisoned() {
+        let poison = Poisoning::Healthy(321);
+        let is_poisoned = poison.is_poisoned();
+        assert_eq!(is_poisoned, false);
+
+        let poison = Poisoning::Poisoned(123);
+        let is_poisoned = poison.is_poisoned();
+        assert_eq!(is_poisoned, true);
+    }
+
+    #[test]
+    fn poisoning_is_healthy() {
+        let poison = Poisoning::Healthy(321);
+        let is_poisoned = poison.is_healthy();
+        assert_eq!(is_poisoned, true);
+
+        let poison = Poisoning::Poisoned(123);
+        let is_poisoned = poison.is_healthy();
+        assert_eq!(is_poisoned, false);
+    }
+}

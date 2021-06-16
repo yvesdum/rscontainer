@@ -58,3 +58,34 @@ impl fmt::Debug for TypeErasedService {
             .finish()
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Tests
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::rc::Rc;
+
+    #[test]
+    fn shared_ptr_new() {
+        let thing = Rc::new(100);
+        let thing_clone = Rc::clone(&thing);
+        let ptr = SharedPtr::new(thing);
+        assert_eq!(Rc::strong_count(&thing_clone), 2);
+        assert_eq!(
+            Rc::as_ptr(&thing_clone) as *const (),
+            ptr.ptr.as_ptr() as *const ()
+        );
+    }
+
+    #[test]
+    fn shared_ptr_drop() {
+        let thing = Rc::new(100);
+        let thing_clone = Rc::clone(&thing);
+        let ptr = SharedPtr::new(thing);
+        drop(ptr);
+        assert_eq!(Rc::strong_count(&thing_clone), 1);
+    }
+}

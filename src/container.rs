@@ -54,7 +54,7 @@ impl ServiceContainer {
     /// Returns the inner hashmap for testing purposes.
     #[cfg(test)]
     #[allow(unused)]
-    pub(crate) fn inner(&self) -> &FnvHashMap<TypeId, TypeErasedService> {
+    fn inner(&self) -> &FnvHashMap<TypeId, TypeErasedService> {
         &self.services
     }
 
@@ -186,13 +186,27 @@ mod tests {
     }
 
     struct Failing;
+
     impl IShared for Failing {
         type Pointer = Rc<Access<Failing>>;
         type Target = Failing;
         type Error = &'static str;
 
         fn construct(_: &mut ServiceContainer) -> Result<Shared<Self>, Self::Error> {
-            Err("error")
+            Err("error123")
+        }
+    }
+
+    impl ILocal for Failing {
+        type Instance = Failing;
+        type Parameters = ();
+        type Error = &'static str;
+    
+        fn construct(
+            _: &mut ServiceContainer,
+            _: Self::Parameters,
+        ) -> Result<Local<Self>, Self::Error> {
+            Err("error456")
         }
     }
 
@@ -300,7 +314,17 @@ mod tests {
     fn resolve_shared_failing() {
         let mut ctn = ServiceContainer::new();
         let result: Result<Shared<Failing>, _> = ctn.shared();
-        assert!(matches!(result, Err("error")));
+        assert!(matches!(result, Err("error123")));
+    }
+
+    #[test]
+    fn resolve_shared_custom_failing() {
+        let mut ctn = ServiceContainer::builder()
+            .with_shared_constructor::<u32>(|_| Err(()))
+            .build();
+
+        let result: Result<Shared<u32>, _> = ctn.shared();
+        assert!(matches!(result, Err(())));
     }
 
     #[test]
@@ -336,5 +360,22 @@ mod tests {
         let instance: Local<u32> = ctn.local(()).unwrap();
         let instance_2: Local<u32> = ctn.local(()).unwrap();
         assert_eq!(*instance, *instance_2);
+    }
+
+    #[test]
+    fn resolve_local_failing() {
+        let mut ctn = ServiceContainer::new();
+        let result: Result<Local<Failing>, _> = ctn.local(());
+        assert!(matches!(result, Err("error456")));
+    }
+
+    #[test]
+    fn resolve_local_custom_failing() {
+        let mut ctn = ServiceContainer::builder()
+            .with_local_constructor::<u32>(|_, _| Err(()))
+            .build();
+
+        let result: Result<Local<u32>, _> = ctn.local(());
+        assert!(matches!(result, Err(())));
     }
 }

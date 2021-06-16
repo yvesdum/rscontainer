@@ -340,3 +340,22 @@ impl<S: ?Sized + IInstance> From<Local<S>> for Instance<S> {
         Self::from_local(l)
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Tests
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::Access;
+    use std::rc::Rc;
+
+    #[test]
+    fn shared_is() {
+        let s1 = Shared::<u32>::new(Rc::new(Access::new(100)));
+        let s2 = s1.clone();
+
+        assert!(s1.is(&s2));
+    }
+}

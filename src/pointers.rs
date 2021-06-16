@@ -29,7 +29,7 @@ pub unsafe trait ISharedPointer: Sized + Clone {
     ///
     /// # Safety
     ///
-    /// `ptr` should be created by the `into_ptr()` method of the 
+    /// `ptr` should be created by the `into_ptr()` method of the
     /// same impl block. This ensures that `ptr` has the same type as `Self`.
     ///
     /// Apart from dropping, the returned smart pointer should always be cloned
@@ -44,10 +44,10 @@ pub unsafe trait ISharedPointer: Sized + Clone {
     ///
     /// # Safety
     ///
-    /// `ptr` should be created by the `into_ptr()` method of the 
+    /// `ptr` should be created by the `into_ptr()` method of the
     /// same impl block. This ensures that `ptr` has the same type as `Self`.
     unsafe fn clone_from_ptr(ptr: NonNull<()>) -> Self {
-        // SAFETY: we need to prevent the destructor of the original smart 
+        // SAFETY: we need to prevent the destructor of the original smart
         // pointer from running, so we wrap it in ManuallyDrop.
         let original = ManuallyDrop::new(Self::from_ptr(ptr));
         // We clone the ManuallyDrop and take the pointer out of the clone.
@@ -59,10 +59,10 @@ pub unsafe trait ISharedPointer: Sized + Clone {
     ///
     /// # Safety
     ///
-    /// `ptr` should be created by the `into_ptr()` method of the 
+    /// `ptr` should be created by the `into_ptr()` method of the
     /// same impl block. This ensures that `ptr` has the same type as `Self`.
     ///
-    /// After this method `ptr` points to possibly freed memory, so it should 
+    /// After this method `ptr` points to possibly freed memory, so it should
     /// not be used anymore.
     unsafe fn drop_from_ptr(ptr: NonNull<()>) {
         drop(Self::from_ptr(ptr))
@@ -119,12 +119,11 @@ mod tests {
         let rc = Rc::new(100u32);
         let rc_ptr = Rc::into_raw(Rc::clone(&rc));
 
-        let rc_from_ptr: Rc<u32> = unsafe {
-            ISharedPointer::from_ptr(NonNull::new(rc_ptr as *mut _).unwrap())
-        };
+        let rc_from_ptr: Rc<u32> =
+            unsafe { ISharedPointer::from_ptr(NonNull::new(rc_ptr as *mut _).unwrap()) };
 
         assert!(Rc::ptr_eq(&rc_from_ptr, &rc));
-        assert_eq!(rc_from_ptr, rc);
+        assert_eq!(*rc_from_ptr, *rc);
     }
 
     #[test]
@@ -132,40 +131,38 @@ mod tests {
         let rc = Rc::new(100u32);
         let rc_clone = Rc::clone(&rc);
 
-        let rc_ptr = Rc::into_raw(rc);
-        let rc_clone_ptr = unsafe {
-            ISharedPointer::into_ptr(rc_clone)
-        };
+        let rc_ptr = Rc::as_ptr(&rc);
+        let rc_clone_ptr = unsafe { ISharedPointer::into_ptr(rc_clone) };
 
         assert_eq!(rc_ptr, rc_clone_ptr.as_ptr() as *const _);
+
+        unsafe {
+            drop(Rc::from_raw(rc_clone_ptr.as_ptr() as *const u32));
+        }
     }
 
     #[test]
     fn rc_clone_from_ptr() {
         let rc = Rc::new(100u32);
 
-        let ptr = unsafe {
-            ISharedPointer::into_ptr(rc)
-        };
+        let ptr = unsafe { ISharedPointer::into_ptr(rc) };
 
-        let rc_clone: Rc<u32> = unsafe {
-            ISharedPointer::clone_from_ptr(ptr)
-        };
+        let rc_clone: Rc<u32> = unsafe { ISharedPointer::clone_from_ptr(ptr) };
 
         assert_eq!(Rc::strong_count(&rc_clone), 2);
+
+        unsafe {
+            drop(Rc::from_raw(ptr.as_ptr() as *const u32));
+        }
     }
 
     #[test]
     fn rc_drop_from_ptr() {
         let rc = Rc::new(100u32);
 
-        let ptr = unsafe {
-            ISharedPointer::into_ptr(rc)
-        };
+        let ptr = unsafe { ISharedPointer::into_ptr(rc) };
 
-        let rc_clone: Rc<u32> = unsafe {
-            ISharedPointer::clone_from_ptr(ptr)
-        };
+        let rc_clone: Rc<u32> = unsafe { ISharedPointer::clone_from_ptr(ptr) };
 
         assert_eq!(Rc::strong_count(&rc_clone), 2);
 
@@ -181,12 +178,11 @@ mod tests {
         let rc = Arc::new(100u32);
         let rc_ptr = Arc::into_raw(Arc::clone(&rc));
 
-        let rc_from_ptr: Arc<u32> = unsafe {
-            ISharedPointer::from_ptr(NonNull::new(rc_ptr as *mut _).unwrap())
-        };
+        let rc_from_ptr: Arc<u32> =
+            unsafe { ISharedPointer::from_ptr(NonNull::new(rc_ptr as *mut _).unwrap()) };
 
         assert!(Arc::ptr_eq(&rc_from_ptr, &rc));
-        assert_eq!(rc_from_ptr, rc);
+        assert_eq!(*rc_from_ptr, *rc);
     }
 
     #[test]
@@ -194,40 +190,38 @@ mod tests {
         let rc = Arc::new(100u32);
         let rc_clone = Arc::clone(&rc);
 
-        let rc_ptr = Arc::into_raw(rc);
-        let rc_clone_ptr = unsafe {
-            ISharedPointer::into_ptr(rc_clone)
-        };
+        let rc_ptr = Arc::as_ptr(&rc);
+        let rc_clone_ptr = unsafe { ISharedPointer::into_ptr(rc_clone) };
 
         assert_eq!(rc_ptr, rc_clone_ptr.as_ptr() as *const _);
+
+        unsafe {
+            drop(Arc::from_raw(rc_clone_ptr.as_ptr() as *const u32));
+        }
     }
 
     #[test]
     fn arc_clone_from_ptr() {
         let rc = Arc::new(100u32);
 
-        let ptr = unsafe {
-            ISharedPointer::into_ptr(rc)
-        };
+        let ptr = unsafe { ISharedPointer::into_ptr(rc) };
 
-        let rc_clone: Arc<u32> = unsafe {
-            ISharedPointer::clone_from_ptr(ptr)
-        };
+        let rc_clone: Arc<u32> = unsafe { ISharedPointer::clone_from_ptr(ptr) };
 
         assert_eq!(Arc::strong_count(&rc_clone), 2);
+
+        unsafe {
+            drop(Arc::from_raw(ptr.as_ptr() as *const u32));
+        }
     }
 
     #[test]
     fn arc_drop_from_ptr() {
         let rc = Arc::new(100u32);
 
-        let ptr = unsafe {
-            ISharedPointer::into_ptr(rc)
-        };
+        let ptr = unsafe { ISharedPointer::into_ptr(rc) };
 
-        let rc_clone: Arc<u32> = unsafe {
-            ISharedPointer::clone_from_ptr(ptr)
-        };
+        let rc_clone: Arc<u32> = unsafe { ISharedPointer::clone_from_ptr(ptr) };
 
         assert_eq!(Arc::strong_count(&rc_clone), 2);
 
