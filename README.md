@@ -31,7 +31,7 @@ Resolving a local instance:
 use rscontainer::ServiceContainer;
 
 let mut container = ServiceContainer::new();
-let mut foo: Local<SomeService> = container.local(()).unwrap();
+let mut foo = container.local::<SomeService>(()).unwrap();
 foo.do_something();
 ```
 
