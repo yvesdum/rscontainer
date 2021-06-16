@@ -2,16 +2,16 @@
 
 use super::access::{Access, IAccess};
 use super::container::ServiceContainer;
-use super::getters::{Global, Local};
-use super::pointers::IGlobalPointer;
+use super::getters::{Shared, Local};
+use super::pointers::ISharedPointer;
 use std::rc::Rc;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Traits
 ///////////////////////////////////////////////////////////////////////////////
 
-/// A type that can be used as a global service.
-pub trait IGlobal {
+/// A type that can be used as a shared service.
+pub trait IShared {
     /// The type of the smart pointer to the service. Supported by default:
     ///
     /// * `Rc<Access<T>>`
@@ -27,9 +27,9 @@ pub trait IGlobal {
     /// implements interior mutability.
     ///
     /// [`Access`]: crate::access::Access
-    type Pointer: IGlobalPointer + IAccess<Target = Self::Access>;
+    type Pointer: ISharedPointer + IAccess<Target = Self::Access>;
 
-    /// The type that is used to access the singleton.
+    /// The type that is used to access the shared instance.
     ///
     /// This should be the type that the pointer eventually dereferences to.
     type Access;
@@ -38,11 +38,11 @@ pub trait IGlobal {
     /// this service.
     type Error;
 
-    /// Constructs an instance of the global service.
-    fn construct(ctn: &mut ServiceContainer) -> Result<Global<Self>, Self::Error>;
+    /// Constructs an instance of the shared service.
+    fn construct(ctn: &mut ServiceContainer) -> Result<Shared<Self>, Self::Error>;
 
     /// Called each time after the service is resolved from the container.
-    fn resolved(_this: &Global<Self>, _ctn: &mut ServiceContainer) {}
+    fn resolved(_this: &Shared<Self>, _ctn: &mut ServiceContainer) {}
 }
 
 /// A type that can be used as a local service.
@@ -57,7 +57,7 @@ pub trait ILocal {
     /// this service.
     type Error;
 
-    /// Constructs an instance of the global service.
+    /// Constructs an instance of the shared service.
     fn construct(
         ctn: &mut ServiceContainer,
         params: Self::Parameters,
@@ -67,8 +67,8 @@ pub trait ILocal {
     fn resolved(_this: &mut Self::Instance, _ctn: &mut ServiceContainer) {}
 }
 
-/// A service that can be used as both a local and global instance.
-pub trait IInstance: ILocal + IGlobal {}
+/// A service that can be used as both a local and shared instance.
+pub trait IInstance: ILocal + IShared {}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Implementations
@@ -76,15 +76,15 @@ pub trait IInstance: ILocal + IGlobal {}
 
 /// IInstance is implemented for every service that implements `ILocal` and
 /// `IGlobal`. `ILocal::Instance` must be the same as `IGlobal::Access`.
-impl<S> IInstance for S where S: ILocal + IGlobal<Access = <S as ILocal>::Instance> {}
+impl<S> IInstance for S where S: ILocal + IShared<Access = <S as ILocal>::Instance> {}
 
-impl IGlobal for () {
+impl IShared for () {
     type Pointer = Rc<Access<()>>;
     type Access = ();
     type Error = ();
 
-    fn construct(_: &mut ServiceContainer) -> Result<Global<Self>, Self::Error> {
-        Ok(Global::new(Rc::new(Access::new(()))))
+    fn construct(_: &mut ServiceContainer) -> Result<Shared<Self>, Self::Error> {
+        Ok(Shared::new(Rc::new(Access::new(()))))
     }
 }
 

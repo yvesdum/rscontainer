@@ -9,21 +9,21 @@ use std::sync::Arc;
 // Trait
 ///////////////////////////////////////////////////////////////////////////////
 
-/// A smart pointer that can be used to store a global instance.
+/// A smart pointer that can be used to store a shared instance.
 ///
 /// # Safety
 ///
 /// This trait may only be implemented on reference counted pointers, such as
 /// `Rc` and `Arc`. It may not be implemented on `Box`, because it could lead
 /// to multiple boxes pointing to the same location.
-pub unsafe trait IGlobalPointer: Sized + Clone {
+pub unsafe trait ISharedPointer: Sized + Clone {
     /// Transforms the smart pointer into a raw pointer.
     ///
     /// # Safety
     ///
     /// After calling this method, dropping of the smart pointer should be
     /// manually handled.
-    unsafe fn from_ptr(ptr: NonNull<()>) -> Self;
+    unsafe fn into_ptr(self) -> NonNull<()>;
 
     /// Re-inits the smart pointer from a type erased raw pointer.
     ///
@@ -36,7 +36,7 @@ pub unsafe trait IGlobalPointer: Sized + Clone {
     /// before it's used, because this method does not increase the ref count.
     ///
     /// It is preferred to use the `clone_from_ptr` method instead.
-    unsafe fn into_ptr(self) -> NonNull<()>;
+    unsafe fn from_ptr(ptr: NonNull<()>) -> Self;
 
     /// Creates a clone of the smart pointer from a raw pointer.
     ///
@@ -76,7 +76,7 @@ pub unsafe trait IGlobalPointer: Sized + Clone {
 // Implementations
 ///////////////////////////////////////////////////////////////////////////////
 
-unsafe impl<T> IGlobalPointer for Rc<T> {
+unsafe impl<T> ISharedPointer for Rc<T> {
     unsafe fn from_ptr(ptr: NonNull<()>) -> Self {
         Rc::from_raw(ptr.as_ptr() as *const T)
     }
@@ -91,7 +91,7 @@ unsafe impl<T> IGlobalPointer for Rc<T> {
     }
 }
 
-unsafe impl<T> IGlobalPointer for Arc<T> {
+unsafe impl<T> ISharedPointer for Arc<T> {
     unsafe fn from_ptr(ptr: NonNull<()>) -> Self {
         Arc::from_raw(ptr.as_ptr() as *const T)
     }

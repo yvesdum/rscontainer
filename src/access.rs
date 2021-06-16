@@ -25,7 +25,7 @@ impl<S> Poisoning<S> {
     pub fn assert_healthy(self) -> S {
         match self {
             Self::Healthy(value) => value,
-            Self::Poisoned(..) => panic!("Global instance is poisoned"),
+            Self::Poisoned(..) => panic!("Shared instance is poisoned"),
         }
     }
 
@@ -50,52 +50,52 @@ impl<S> Poisoning<S> {
 // Traits
 ///////////////////////////////////////////////////////////////////////////////
 
-/// Provides access to a global instance.
+/// Provides access to a shared instance.
 pub trait IAccess {
     /// The actual type of the instance.
     type Target: ?Sized;
 
-    /// Tries to get access to the global instance through a closure.
+    /// Tries to get access to the shared instance through a closure.
     ///
-    /// Returns `None` if the access failed, for example if the global instance 
+    /// Returns `None` if the access failed, for example if the shared instance 
     /// is already locked or mutably borrowed.
     ///
     /// The parameter of the closure contains the poisoning status of the
     /// instance.
     fn try_access<U, F: FnOnce(Poisoning<&Self::Target>) -> U>(&self, f: F) -> Option<U>;
 
-    /// Get access to the global instance through a closure.
+    /// Get access to the shared instance through a closure.
     ///
     /// The parameter of the closure contains the poisoning status of the
     /// instance.
     fn access_poisoned<U, F: FnOnce(Poisoning<&Self::Target>) -> U>(&self, f: F) -> U;
 
-    /// Get access to the global instance through a closure.
+    /// Get access to the shared instance through a closure.
     ///
-    /// Panics if the global instance is poisoned or already mutably borrowed.
+    /// Panics if the shared instance is poisoned or already mutably borrowed.
     fn access<U, F: FnOnce(&Self::Target) -> U>(&self, f: F) -> U;
 }
 
-/// Provides mutable access to a global instance.
+/// Provides mutable access to a shared instance.
 pub trait IAccessMut: IAccess {
-    /// Tries to get mutable access to the global instance through a closure.
+    /// Tries to get mutable access to the shared instance through a closure.
     ///
-    /// Returns `None` if the access failed, for example if the global instance is
+    /// Returns `None` if the access failed, for example if the shared instance is
     /// already locked or mutably borrowed.
     ///
     /// The parameter of the closure contains the poisoning status of the
     /// instance.
     fn try_access_mut<U, F: FnOnce(Poisoning<&mut Self::Target>) -> U>(&self, f: F) -> Option<U>;
 
-    /// Get mutable access to the global instance through a closure.
+    /// Get mutable access to the shared instance through a closure.
     ///
     /// The parameter of the closure contains the poisoning status of the
     /// instance.
     fn access_poisoned_mut<U, F: FnOnce(Poisoning<&mut Self::Target>) -> U>(&self, f: F) -> U;
 
-    /// Get mutable access to the global instance through a closure.
+    /// Get mutable access to the shared instance through a closure.
     ///
-    /// Panics if the global instance is poisoned or already mutably borrowed.
+    /// Panics if the shared instance is poisoned or already mutably borrowed.
     fn access_mut<U, F: FnOnce(&mut Self::Target) -> U>(&self, f: F) -> U;
 }
 

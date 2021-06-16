@@ -1,9 +1,9 @@
 //! Container version 2.0
 
-use crate::{ContainerBuilder, getters::{Global, IResolveGlobal, IResolveLocal, Local}};
-use crate::internal_helpers::{GlobalCtor, GlobalPtr, LocalCtor, TypeErasedService};
-use crate::pointers::IGlobalPointer;
-use crate::service_traits::{IGlobal, ILocal};
+use crate::{ContainerBuilder, getters::{Shared, IResolveShared, IResolveLocal, Local}};
+use crate::internal_helpers::{SharedCtor, SharedPtr, LocalCtor, TypeErasedService};
+use crate::pointers::ISharedPointer;
+use crate::service_traits::{IShared, ILocal};
 use fnv::FnvHashMap;
 use std::any::TypeId;
 
@@ -55,23 +55,23 @@ impl ServiceContainer {
         &self.services
     }
 
-    /// Inserts a global instance.
+    /// Inserts a shared instance.
     ///
     /// Panics if the instance already exists, because it is not allowed to
     /// mutate the container after it is built.
-    pub fn insert<S: 'static + ?Sized + IGlobal>(&mut self, singleton: Global<S>) {
+    pub fn insert<S: 'static + ?Sized + IShared>(&mut self, instance: Shared<S>) {
         let entry = self.services.entry(TypeId::of::<S>()).or_default();
-        assert!(entry.global_ptr.is_none());
-        entry.global_ptr = Some(GlobalPtr::new(singleton.into_inner()));
+        assert!(entry.shared_ptr.is_none());
+        entry.shared_ptr = Some(SharedPtr::new(instance.into_inner()));
     }
 
     ///////////////////////////////////////////////////////////////////////////
     // Generic Resolve Methods
     ///////////////////////////////////////////////////////////////////////////
 
-    /// Resolves a `Global` or `Instance::Global`.
+    /// Resolves a `Shared` or `Instance::Shared`.
     #[inline]
-    pub fn global<R: IResolveGlobal>(&mut self) -> Result<R, R::Error> {
+    pub fn shared<R: IResolveShared>(&mut self) -> Result<R, R::Error> {
         R::resolve(self)
     }
 
@@ -85,27 +85,27 @@ impl ServiceContainer {
     // Specialized Resolve Methods
     ///////////////////////////////////////////////////////////////////////////
 
-    /// Resolves a global instance.
-    pub fn resolve_global<S: 'static + ?Sized + IGlobal>(&mut self) -> Result<Global<S>, S::Error> {
+    /// Resolves a shared instance.
+    pub fn resolve_shared<S: 'static + ?Sized + IShared>(&mut self) -> Result<Shared<S>, S::Error> {
         let instance = match self.services.get(&TypeId::of::<S>()) {
             // There's an instance in the container, so we clone the smart pointer.
             Some(TypeErasedService {
-                global_ptr: Some(ptr),
+                shared_ptr: Some(ptr),
                 ..
             }) => unsafe {
                 // SAFETY: because the TypeId is the key, we're certain
                 // that we're casting to the right type.
-                Global::new(S::Pointer::clone_from_ptr(ptr.ptr))
+                Shared::new(S::Pointer::clone_from_ptr(ptr.ptr))
             },
 
             // There's no instance, but there is a custom constructor.
             Some(TypeErasedService {
-                global_ctor: Some(ctor),
+                shared_ctor: Some(ctor),
                 ..
             }) => unsafe {
                 // SAFETY: because the TypeId is the key, we're certain
                 // that we're casting to the right type.
-                let ctor: GlobalCtor<S> = std::mem::transmute(*ctor);
+                let ctor: SharedCtor<S> = std::mem::transmute(*ctor);
                 let instance = ctor(self)?;
                 self.insert(instance.clone());
                 instance

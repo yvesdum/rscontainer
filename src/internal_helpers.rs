@@ -1,41 +1,41 @@
 //! Internal storage helpers.
 
 use crate::container::ServiceContainer;
-use crate::getters::{Global, Local};
-use crate::pointers::IGlobalPointer;
-use crate::service_traits::{IGlobal, ILocal};
+use crate::getters::{Shared, Local};
+use crate::pointers::ISharedPointer;
+use crate::service_traits::{IShared, ILocal};
 use std::fmt;
 use std::ptr::NonNull;
 
-/// A raw pointer to a singleton instance with drop logic.
-/// This is a type-erased `Rc` or `Arc` that implements `ISingletonPointer`.
+/// A raw pointer to a shared instance with drop logic.
+/// This is a type-erased `Rc` or `Arc` that implements `ISharedPointer`.
 #[derive(Debug)]
-pub(crate) struct GlobalPtr {
+pub(crate) struct SharedPtr {
     pub ptr: NonNull<()>,
     dtor: unsafe fn(NonNull<()>),
 }
 
-impl Drop for GlobalPtr {
+impl Drop for SharedPtr {
     fn drop(&mut self) {
         #[cfg(test)]
-        println!("Dropping SingletonPtr {:p}", self);
+        println!("Dropping SharedPtr {:p}", self);
 
         unsafe { (self.dtor)(self.ptr) }
     }
 }
 
-impl GlobalPtr {
-    pub fn new<P: IGlobalPointer>(instance: P) -> Self {
-        GlobalPtr {
+impl SharedPtr {
+    pub fn new<P: ISharedPointer>(instance: P) -> Self {
+        SharedPtr {
             ptr: unsafe { instance.into_ptr() },
             dtor: P::drop_from_ptr,
         }
     }
 }
 
-/// A custom constructor for a global instance.
-pub(crate) type GlobalCtor<S> =
-    fn(&mut ServiceContainer) -> Result<Global<S>, <S as IGlobal>::Error>;
+/// A custom constructor for a shared instance.
+pub(crate) type SharedCtor<S> =
+    fn(&mut ServiceContainer) -> Result<Shared<S>, <S as IShared>::Error>;
 
 /// A custom constructor for a local instance.
 pub(crate) type LocalCtor<S> =
@@ -44,10 +44,10 @@ pub(crate) type LocalCtor<S> =
 /// A service in the container that is type erased.
 #[derive(Default)]
 pub(crate) struct TypeErasedService {
-    /// A raw pointer to the global instance.
-    pub global_ptr: Option<GlobalPtr>,
-    /// Custom constructor for a global instance.
-    pub global_ctor: Option<GlobalCtor<()>>,
+    /// A raw pointer to the shared instance.
+    pub shared_ptr: Option<SharedPtr>,
+    /// Custom constructor for a shared instance.
+    pub shared_ctor: Option<SharedCtor<()>>,
     /// Custom constructor for a local instance.
     pub local_ctor: Option<LocalCtor<()>>,
 }
@@ -55,8 +55,8 @@ pub(crate) struct TypeErasedService {
 impl fmt::Debug for TypeErasedService {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("TypeErasedService")
-            .field("global_ptr", &self.global_ptr)
-            .field("global_ctor", &self.global_ctor.is_some())
+            .field("shared_ptr", &self.shared_ptr)
+            .field("shared_ctor", &self.shared_ctor.is_some())
             .field("local_ctor", &self.local_ctor.is_some())
             .finish()
     }

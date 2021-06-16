@@ -2,8 +2,8 @@
 
 use super::access::{IAccess, IAccessMut, Poisoning};
 use super::container::ServiceContainer;
-use super::pointers::IGlobalPointer;
-use super::service_traits::{IGlobal, IInstance, ILocal};
+use super::pointers::ISharedPointer;
+use super::service_traits::{IShared, IInstance, ILocal};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 
@@ -11,8 +11,8 @@ use std::ops::{Deref, DerefMut};
 // Helper Traits
 ///////////////////////////////////////////////////////////////////////////////
 
-/// A global instance that can be resolved from the service container.
-pub trait IResolveGlobal: Sized {
+/// A shared instance that can be resolved from the service container.
+pub trait IResolveShared: Sized {
     type Error;
 
     /// Resolve the instance from the container.
@@ -29,32 +29,32 @@ pub trait IResolveLocal: Sized {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// global instance Instance
+// Shared Instance
 ///////////////////////////////////////////////////////////////////////////////
 
-/// A pointer to a global instance from the service container.
+/// A pointer to a shared instance from the service container.
 #[repr(transparent)]
-pub struct Global<S: ?Sized + IGlobal> {
-    /// The actual smart pointer to the global instance instance.
+pub struct Shared<S: ?Sized + IShared> {
+    /// The actual smart pointer to the shared instance.
     inner: S::Pointer,
 }
 
-impl<S: 'static + ?Sized + IGlobal> IResolveGlobal for Global<S> {
+impl<S: 'static + ?Sized + IShared> IResolveShared for Shared<S> {
     type Error = S::Error;
 
     #[inline]
     fn resolve(ctn: &mut ServiceContainer) -> Result<Self, Self::Error> {
-        ctn.resolve_global()
+        ctn.resolve_shared()
     }
 }
 
-impl<S: ?Sized + IGlobal> Global<S> {
-    /// Creates a global instance from the inner smart pointer.
+impl<S: ?Sized + IShared> Shared<S> {
+    /// Creates a shared instance from the inner smart pointer.
     pub fn new(inner: S::Pointer) -> Self {
         Self { inner }
     }
 
-    /// Returns the inner smart pointer of the global instance.
+    /// Returns the inner smart pointer of the shared instance.
     pub fn into_inner(self) -> S::Pointer {
         self.inner
     }
@@ -69,15 +69,15 @@ impl<S: ?Sized + IGlobal> Global<S> {
         &mut self.inner
     }
 
-    /// Returns true if two global instances point to the same instance.
+    /// Returns true if two shared instances point to the same instance.
     ///
-    /// Only compares the pointers, not the contents of the global instances,
+    /// Only compares the pointers, not the contents of the shared instances,
     /// and is therefore always cheap.
     pub fn is(&self, other: &Self) -> bool {
         self.inner.ptr_eq(other.inner())
     }
 
-    /// Get access to the global instance through a closure.
+    /// Get access to the shared instance through a closure.
     pub fn access<U, F>(&self, accessor: F) -> U
     where
         S::Pointer: IAccess,
@@ -86,7 +86,7 @@ impl<S: ?Sized + IGlobal> Global<S> {
         self.inner.access(accessor)
     }
 
-    /// Get access to the global instance through a closure.
+    /// Get access to the shared instance through a closure.
     pub fn access_poisoned<U, F>(&self, f: F) -> U
     where
         S::Pointer: IAccess,
@@ -95,7 +95,7 @@ impl<S: ?Sized + IGlobal> Global<S> {
         self.inner.access_poisoned(f)
     }
 
-    /// Get access to the global instance through a closure.
+    /// Get access to the shared instance through a closure.
     pub fn try_access<U, F>(&self, f: F) -> Option<U>
     where
         S::Pointer: IAccess,
@@ -104,7 +104,7 @@ impl<S: ?Sized + IGlobal> Global<S> {
         self.inner.try_access(f)
     }
 
-    /// Get mutable access to the global instance.
+    /// Get mutable access to the shared instance.
     pub fn access_mut<U, F>(&self, accessor: F) -> U
     where
         S::Pointer: IAccessMut,
@@ -113,7 +113,7 @@ impl<S: ?Sized + IGlobal> Global<S> {
         self.inner.access_mut(accessor)
     }
 
-    /// Get access to the global instance through a closure.
+    /// Get access to the shared instance through a closure.
     pub fn access_poisoned_mut<U, F>(&self, f: F) -> U
     where
         S::Pointer: IAccessMut,
@@ -122,7 +122,7 @@ impl<S: ?Sized + IGlobal> Global<S> {
         self.inner.access_poisoned_mut(f)
     }
 
-    /// Get access to the global instance through a closure.
+    /// Get access to the shared instance through a closure.
     pub fn try_access_mut<U, F>(&self, f: F) -> Option<U>
     where
         S::Pointer: IAccessMut,
@@ -132,7 +132,7 @@ impl<S: ?Sized + IGlobal> Global<S> {
     }
 }
 
-impl<S: ?Sized + IGlobal> Deref for Global<S>
+impl<S: ?Sized + IShared> Deref for Shared<S>
 where
     S::Pointer: Deref,
 {
@@ -143,8 +143,8 @@ where
     }
 }
 
-impl<S: ?Sized + IGlobal> Clone for Global<S> {
-    /// Clones the pointer to the global instance instance.
+impl<S: ?Sized + IShared> Clone for Shared<S> {
+    /// Clones the pointer to the shared instance.
     ///
     /// Only increases the reference count, so this is very cheap.
     /// See [`Rc::clone`] and [`Arc::clone`].
@@ -152,18 +152,18 @@ impl<S: ?Sized + IGlobal> Clone for Global<S> {
     /// [`Rc::clone`]: std::rc::Rc::clone
     /// [`Arc::clone`]: std::sync::Arc::clone
     fn clone(&self) -> Self {
-        Global {
+        Shared {
             inner: self.inner.clone(),
         }
     }
 }
 
-impl<S: ?Sized + IGlobal> fmt::Debug for Global<S>
+impl<S: ?Sized + IShared> fmt::Debug for Shared<S>
 where
     S::Pointer: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("global instance")
+        f.debug_struct("Shared")
             .field("inner", &self.inner)
             .finish()
     }
@@ -256,12 +256,12 @@ where
 // Any Kind Instance
 ///////////////////////////////////////////////////////////////////////////////
 
-/// Some instance of a service, either a global instance or local instance.
+/// Some instance of a service, either a shared instance or local instance.
 ///
 /// Use this as a field, when you want the user to decide whether they want to
-/// supply a global or local instance.
+/// supply a shared or local instance.
 pub enum Instance<S: ?Sized + IInstance> {
-    Global(Global<S>),
+    Shared(Shared<S>),
     Local(Local<S>),
 }
 
@@ -278,19 +278,19 @@ where
     }
 }
 
-impl<S: 'static + ?Sized + IInstance> IResolveGlobal for Instance<S> {
-    type Error = <S as IGlobal>::Error;
+impl<S: 'static + ?Sized + IInstance> IResolveShared for Instance<S> {
+    type Error = <S as IShared>::Error;
 
     #[inline]
     fn resolve(ctn: &mut ServiceContainer) -> Result<Self, Self::Error> {
-        ctn.resolve_global().map(|s| Self::from_global(s))
+        ctn.resolve_shared().map(|s| Self::from_shared(s))
     }
 }
 
 impl<S: ?Sized + IInstance> Instance<S> {
-    /// Creates an instance from a global instance pointer.
-    pub fn from_global(inner: Global<S>) -> Self {
-        Self::Global(inner)
+    /// Creates an instance from a shared instance pointer.
+    pub fn from_shared(inner: Shared<S>) -> Self {
+        Self::Shared(inner)
     }
 
     /// Creates an instance from a local instance.
@@ -305,31 +305,31 @@ impl<S: ?Sized + IInstance> Instance<S> {
         F: FnOnce(&S::Instance) -> U,
     {
         match self {
-            Self::Global(s) => s.access(accessor),
+            Self::Shared(s) => s.access(accessor),
             Self::Local(l) => accessor(l),
         }
     }
 
-    /// Get access to the global instance through a closure.
+    /// Get access to the shared instance through a closure.
     pub fn access_poisoned<U, F>(&self, accessor: F) -> U
     where
         S::Pointer: IAccess<Target = S::Instance>,
         F: FnOnce(Poisoning<&S::Instance>) -> U,
     {
         match self {
-            Self::Global(s) => s.access_poisoned(accessor),
+            Self::Shared(s) => s.access_poisoned(accessor),
             Self::Local(l) => accessor(Poisoning::Healthy(l)),
         }
     }
 
-    /// Get access to the global instance through a closure.
+    /// Get access to the shared instance through a closure.
     pub fn try_access<U, F>(&self, accessor: F) -> Option<U>
     where
         S::Pointer: IAccess<Target = S::Instance>,
         F: FnOnce(Poisoning<&S::Instance>) -> U,
     {
         match self {
-            Self::Global(s) => s.try_access(accessor),
+            Self::Shared(s) => s.try_access(accessor),
             Self::Local(l) => Some(accessor(Poisoning::Healthy(l))),
         }
     }
@@ -341,39 +341,39 @@ impl<S: ?Sized + IInstance> Instance<S> {
         F: FnOnce(&mut S::Instance) -> U,
     {
         match self {
-            Self::Global(s) => s.access_mut(accessor),
+            Self::Shared(s) => s.access_mut(accessor),
             Self::Local(l) => accessor(l),
         }
     }
     
-    /// Get access to the global instance through a closure.
+    /// Get access to the shared instance through a closure.
     pub fn access_poisoned_mut<U, F>(&mut self, accessor: F) -> U
     where
         S::Pointer: IAccessMut<Target = S::Instance>,
         F: FnOnce(Poisoning<&mut S::Instance>) -> U,
     {
         match self {
-            Self::Global(s) => s.access_poisoned_mut(accessor),
+            Self::Shared(s) => s.access_poisoned_mut(accessor),
             Self::Local(l) => accessor(Poisoning::Healthy(l)),
         }
     }
 
-    /// Get access to the global instance through a closure.
+    /// Get access to the shared instance through a closure.
     pub fn try_access_mut<U, F>(&mut self, accessor: F) -> Option<U>
     where
         S::Pointer: IAccessMut<Target = S::Instance>,
         F: FnOnce(Poisoning<&mut S::Instance>) -> U,
     {
         match self {
-            Self::Global(s) => s.try_access_mut(accessor),
+            Self::Shared(s) => s.try_access_mut(accessor),
             Self::Local(l) => Some(accessor(Poisoning::Healthy(l))),
         }
     }
 }
 
-impl<S: ?Sized + IInstance> From<Global<S>> for Instance<S> {
-    fn from(s: Global<S>) -> Self {
-        Self::from_global(s)
+impl<S: ?Sized + IInstance> From<Shared<S>> for Instance<S> {
+    fn from(s: Shared<S>) -> Self {
+        Self::from_shared(s)
     }
 }
 

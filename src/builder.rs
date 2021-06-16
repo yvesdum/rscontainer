@@ -1,9 +1,9 @@
 //! Create a container with the builder pattern.
 
 use crate::container::ServiceContainer;
-use crate::getters::Global;
-use crate::internal_helpers::{GlobalCtor, GlobalPtr, LocalCtor, TypeErasedService};
-use crate::service_traits::{IGlobal, ILocal};
+use crate::getters::Shared;
+use crate::internal_helpers::{SharedCtor, SharedPtr, LocalCtor, TypeErasedService};
+use crate::service_traits::{IShared, ILocal};
 use fnv::FnvHashMap;
 use std::any::TypeId;
 
@@ -33,18 +33,18 @@ impl ContainerBuilder {
         self.services.entry(key).or_default()
     }
 
-    /// Inserts a global instance.
-    pub fn with_global<S: 'static + ?Sized + IGlobal>(mut self, global: Global<S>) -> Self {
-        self.entry(TypeId::of::<S>()).global_ptr = Some(GlobalPtr::new(global.into_inner()));
+    /// Inserts a shared instance.
+    pub fn with_shared<S: 'static + ?Sized + IShared>(mut self, shared: Shared<S>) -> Self {
+        self.entry(TypeId::of::<S>()).shared_ptr = Some(SharedPtr::new(shared.into_inner()));
         self
     }
 
-    /// Sets a custom constructor for a global instance.
-    pub fn with_global_constructor<S: 'static + ?Sized + IGlobal>(
+    /// Sets a custom constructor for a shared instance.
+    pub fn with_shared_constructor<S: 'static + ?Sized + IShared>(
         mut self,
-        ctor: GlobalCtor<S>,
+        ctor: SharedCtor<S>,
     ) -> Self {
-        self.entry(TypeId::of::<S>()).global_ctor = Some(unsafe { std::mem::transmute(ctor) });
+        self.entry(TypeId::of::<S>()).shared_ctor = Some(unsafe { std::mem::transmute(ctor) });
         self
     }
 
@@ -57,14 +57,14 @@ impl ContainerBuilder {
         self
     }
 
-    /// Sets custom contructors for a local and global intance.
-    pub fn with_constructors<S: 'static + ?Sized + ILocal + IGlobal>(
+    /// Sets custom contructors for a local and shared intance.
+    pub fn with_constructors<S: 'static + ?Sized + ILocal + IShared>(
         mut self,
         local: LocalCtor<S>,
-        global: GlobalCtor<S>,
+        shared: SharedCtor<S>,
     ) -> Self {
         let mut entry = self.entry(TypeId::of::<S>());
-        entry.global_ctor = Some(unsafe { std::mem::transmute(global) });
+        entry.shared_ctor = Some(unsafe { std::mem::transmute(shared) });
         entry.local_ctor = Some(unsafe { std::mem::transmute(local) });
         self
     }
