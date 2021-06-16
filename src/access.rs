@@ -53,12 +53,12 @@ impl<S> Poisoning<S> {
     }
 
     /// Returns `true` if the instance is [`Healthy`].
-    pub fn is_healthy(&self) -> bool {
+    pub const fn is_healthy(&self) -> bool {
         matches!(self, Self::Healthy(..))
     }
 
     /// Returns `true` if the instance is [`Poisoned`].
-    pub fn is_poisoned(&self) -> bool {
+    pub const fn is_poisoned(&self) -> bool {
         matches!(self, Self::Poisoned(..))
     }
 }
@@ -119,7 +119,7 @@ pub struct Access<T: ?Sized>(T);
 
 impl<T> Access<T> {
     /// Creates a new `Access` wrapper around some value.
-    pub fn new(inner: T) -> Self {
+    pub const fn new(inner: T) -> Self {
         Self(inner)
     }
 
@@ -129,7 +129,7 @@ impl<T> Access<T> {
     }
 
     /// Returns a reference to the inner value.
-    pub fn inner(&self) -> &T {
+    pub const fn inner(&self) -> &T {
         &self.0
     }
 }
