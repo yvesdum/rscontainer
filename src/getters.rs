@@ -1,52 +1,10 @@
 //! Wrapper types to get and store services.
 
 use super::access::{IAccess, IAccessMut, Poisoning};
-use super::container::ServiceContainer;
 use super::pointers::ISharedPointer;
-use super::service_traits::{IInstance, ILocal, IShared};
+use super::service_traits::{ILocal, IShared};
 use std::fmt;
 use std::ops::Deref;
-
-///////////////////////////////////////////////////////////////////////////////
-// Helper Traits
-///////////////////////////////////////////////////////////////////////////////
-
-/// A shared instance that can be resolved from the service container.
-pub trait IResolveShared: Sized {
-    type Error;
-
-    /// Resolve the instance from the container.
-    fn resolve(ctn: &mut ServiceContainer) -> Result<Self, Self::Error>;
-}
-
-/// A local instance that can be resolved from the service container.
-pub trait IResolveLocal: Sized {
-    type Error;
-    type Parameters;
-    type Instance;
-
-    /// Resolve the instance from the container.
-    fn resolve(
-        ctn: &mut ServiceContainer,
-        params: Self::Parameters,
-    ) -> Result<Self::Instance, Self::Error>;
-}
-
-impl<T> IResolveLocal for T
-where
-    T: ILocal + 'static,
-{
-    type Error = T::Error;
-    type Parameters = T::Parameters;
-    type Instance = T::Instance;
-
-    fn resolve(
-        ctn: &mut ServiceContainer,
-        params: Self::Parameters,
-    ) -> Result<Self::Instance, Self::Error> {
-        ctn.resolve_local::<T>(params)
-    }
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Shared Instance
@@ -57,15 +15,6 @@ where
 pub struct Shared<S: ?Sized + IShared> {
     /// The actual smart pointer to the shared instance.
     inner: S::Pointer,
-}
-
-impl<S: 'static + ?Sized + IShared> IResolveShared for Shared<S> {
-    type Error = S::Error;
-
-    #[inline]
-    fn resolve(ctn: &mut ServiceContainer) -> Result<Self, Self::Error> {
-        ctn.resolve_shared()
-    }
 }
 
 impl<S: ?Sized + IShared> Shared<S> {
@@ -179,37 +128,14 @@ where
 ///
 /// Use this as a field, when you want the user to decide whether they want to
 /// supply a shared or local instance.
-pub enum Instance<S: ?Sized + IInstance> {
-    Shared(Shared<S>),
+pub enum Instance<S: ?Sized + IShared + ILocal> {
+    Shared(S::Pointer),
     Local(S::Instance),
 }
 
-impl<S: 'static + ?Sized + IInstance> IResolveLocal for Instance<S>
-where
-    S::Parameters: Default,
-{
-    type Error = <S as ILocal>::Error;
-    type Parameters = <S as ILocal>::Parameters;
-    type Instance = Self;
-
-    #[inline]
-    fn resolve(ctn: &mut ServiceContainer, params: Self::Parameters) -> Result<Self, Self::Error> {
-        ctn.resolve_local::<S>(params).map(|s| Self::from_local(s))
-    }
-}
-
-impl<S: 'static + ?Sized + IInstance> IResolveShared for Instance<S> {
-    type Error = <S as IShared>::Error;
-
-    #[inline]
-    fn resolve(ctn: &mut ServiceContainer) -> Result<Self, Self::Error> {
-        ctn.resolve_shared().map(|s| Self::from_shared(s))
-    }
-}
-
-impl<S: ?Sized + IInstance> Instance<S> {
+impl<S: ?Sized + IShared + ILocal> Instance<S> {
     /// Creates an instance from a shared instance pointer.
-    pub fn from_shared(inner: Shared<S>) -> Self {
+    pub fn from_shared(inner: S::Pointer) -> Self {
         Self::Shared(inner)
     }
 
@@ -264,12 +190,6 @@ impl<S: ?Sized + IInstance> Instance<S> {
             Self::Shared(s) => s.try_access_mut(accessor),
             Self::Local(l) => Some(accessor(Poisoning::Healthy(l))),
         }
-    }
-}
-
-impl<S: ?Sized + IInstance> From<Shared<S>> for Instance<S> {
-    fn from(s: Shared<S>) -> Self {
-        Self::from_shared(s)
     }
 }
 

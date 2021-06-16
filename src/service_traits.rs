@@ -1,9 +1,8 @@
 //! Traits for creating services.
 
 use super::access::{Access, IAccess};
-use super::container::ServiceContainer;
-use super::getters::Shared;
 use super::pointers::ISharedPointer;
+use crate::Resolver;
 use std::rc::Rc;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -39,10 +38,10 @@ pub trait IShared {
     type Error;
 
     /// Constructs an instance of the shared service.
-    fn construct(ctn: &mut ServiceContainer) -> Result<Self::Pointer, Self::Error>;
+    fn construct(ctn: Resolver) -> Result<Self::Pointer, Self::Error>;
 
     /// Called each time after the service is resolved from the container.
-    fn resolved(_this: &Shared<Self>, _ctn: &mut ServiceContainer) {}
+    fn resolved(_this: &mut Self::Pointer, _ctn: Resolver) {}
 }
 
 /// A type that can be used as a local service.
@@ -58,32 +57,22 @@ pub trait ILocal {
     type Error;
 
     /// Constructs an instance of the shared service.
-    fn construct(
-        ctn: &mut ServiceContainer,
-        params: Self::Parameters,
-    ) -> Result<Self::Instance, Self::Error>;
+    fn construct(ctn: Resolver, params: Self::Parameters) -> Result<Self::Instance, Self::Error>;
 
     /// Called each time after the service is resolved from the container.
-    fn resolved(_this: &mut Self::Instance, _ctn: &mut ServiceContainer) {}
+    fn resolved(_this: &mut Self::Instance, _ctn: Resolver) {}
 }
-
-/// A service that can be used as both a local and shared instance.
-pub trait IInstance: ILocal + IShared {}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Implementations
 ///////////////////////////////////////////////////////////////////////////////
-
-/// IInstance is implemented for every service that implements `ILocal` and
-/// `IGlobal`. `ILocal::Instance` must be the same as `IGlobal::Target`.
-impl<S> IInstance for S where S: ILocal + IShared<Target = <S as ILocal>::Instance> {}
 
 impl IShared for () {
     type Pointer = Rc<Access<()>>;
     type Target = ();
     type Error = ();
 
-    fn construct(_: &mut ServiceContainer) -> Result<Self::Pointer, Self::Error> {
+    fn construct(_: Resolver) -> Result<Self::Pointer, Self::Error> {
         Ok(Rc::new(Access::new(())))
     }
 }
@@ -93,7 +82,7 @@ impl ILocal for () {
     type Parameters = ();
     type Error = ();
 
-    fn construct(_: &mut ServiceContainer, _: Self::Parameters) -> Result<Self, Self::Error> {
+    fn construct(_: Resolver, _: Self::Parameters) -> Result<Self, Self::Error> {
         Ok(())
     }
 }

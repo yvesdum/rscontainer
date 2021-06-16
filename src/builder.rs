@@ -2,8 +2,8 @@
 
 use crate::container::ServiceContainer;
 use crate::getters::Shared;
-use crate::internal_helpers::{SharedCtor, SharedPtr, LocalCtor, TypeErasedService};
-use crate::service_traits::{IShared, ILocal};
+use crate::internal_helpers::{LocalCtor, SharedCtor, SharedPtr, TypeErasedService};
+use crate::service_traits::{ILocal, IShared};
 use fnv::FnvHashMap;
 use std::any::TypeId;
 
@@ -89,8 +89,9 @@ impl ContainerBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::rc::Rc;
     use crate::Access;
+    use crate::Resolver;
+    use std::rc::Rc;
 
     #[test]
     fn new() {
@@ -142,7 +143,7 @@ mod tests {
     fn with_shared_constructor() {
         let mut ctn = ContainerBuilder::new();
 
-        fn ctor(_: &mut ServiceContainer) -> Result<Rc<Access<u32>>, ()> {
+        fn ctor(_: Resolver) -> Result<Rc<Access<u32>>, ()> {
             Ok(Rc::new(Access::new(456)))
         }
 
@@ -157,12 +158,12 @@ mod tests {
             *entry.shared_ctor.as_ref().unwrap() as *const ()
         );
     }
-    
+
     #[test]
     fn with_local_constructor() {
         let mut ctn = ContainerBuilder::new();
 
-        fn ctor(_: &mut ServiceContainer, _: ()) -> Result<u32, ()> {
+        fn ctor(_: Resolver, _: ()) -> Result<u32, ()> {
             Ok(456)
         }
 
@@ -182,11 +183,11 @@ mod tests {
     fn with_constructors() {
         let mut ctn = ContainerBuilder::new();
 
-        fn shared_ctor(_: &mut ServiceContainer) -> Result<Rc<Access<u32>>, ()> {
+        fn shared_ctor(_: Resolver) -> Result<Rc<Access<u32>>, ()> {
             Ok(Rc::new(Access::new(456)))
         }
 
-        fn local_ctor(_: &mut ServiceContainer, _: ()) -> Result<u32, ()> {
+        fn local_ctor(_: Resolver, _: ()) -> Result<u32, ()> {
             Ok(456)
         }
 

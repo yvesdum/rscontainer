@@ -1,8 +1,8 @@
 //! Internal storage helpers.
 
-use crate::container::ServiceContainer;
 use crate::pointers::ISharedPointer;
 use crate::service_traits::{ILocal, IShared};
+use crate::Resolver;
 use std::fmt;
 use std::ptr::NonNull;
 
@@ -31,11 +31,11 @@ impl SharedPtr {
 
 /// A custom constructor for a shared instance.
 pub(crate) type SharedCtor<S> =
-    fn(&mut ServiceContainer) -> Result<<S as IShared>::Pointer, <S as IShared>::Error>;
+    fn(Resolver) -> Result<<S as IShared>::Pointer, <S as IShared>::Error>;
 
 /// A custom constructor for a local instance.
 pub(crate) type LocalCtor<S> = fn(
-    &mut ServiceContainer,
+    Resolver,
     <S as ILocal>::Parameters,
 ) -> Result<<S as ILocal>::Instance, <S as ILocal>::Error>;
 
