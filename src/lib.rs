@@ -103,10 +103,10 @@
 //! struct InstantService;
 //! impl IShared for InstantService {
 //!     type Pointer = Rc<RefCell<Instant>>;
-//!     type Instance = Instant;
+//!     type Target = Instant;
 //!     type Error = ();
 //!
-//!     fn construct(_: Resolver) -> Result<Rc<RefCell<Instant>>, ()> {
+//!     fn construct(_: Resolver) -> Result<Self::Pointer, Self::Error> {
 //!         Ok(Rc::new(RefCell::new(Instant::now())))
 //!     }
 //! }

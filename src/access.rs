@@ -16,12 +16,12 @@ use std::sync::{Arc, Mutex, RwLock, TryLockError};
 /// How to use this:
 /// * For pointer types that don't support poisoning, use [`assert_healthy`].
 /// * When it's a hard bug if the value is poisoned, use [`assert_healthy`].
-/// * When poisoning status doesn't matter, use [`assume_healthy`].
+/// * When poisoning status doesn't matter, use [`unpoison`].
 /// * When you need different logic for poisoned or not, use a match statement.
 ///
 /// [Nomicon]: https://doc.rust-lang.org/nomicon/poisoning.html
 /// [`assert_healthy`]: Poisoning::assert_healthy
-/// [`assume_healthy`]: Poisoning::assume_healthy
+/// [`unpoison`]: Poisoning::unpoison
 pub enum Poisoning<S> {
     /// The instance is not poisoned, program flow can continue as usual.
     Healthy(S),
@@ -50,7 +50,7 @@ impl<S> Poisoning<S> {
     /// is poisoned.
     ///
     /// [`assert_healthy`]: Poisoning::assert_healthy
-    pub fn assume_healthy(self) -> S {
+    pub fn unpoison(self) -> S {
         match self {
             Self::Healthy(value) => value,
             Self::Poisoned(value) => value,
@@ -371,13 +371,13 @@ mod tests {
     }
 
     #[test]
-    fn poisoning_assume_healthy() {
+    fn poisoning_unpoison() {
         let poison = Poisoning::Healthy(321);
-        let value = poison.assume_healthy();
+        let value = poison.unpoison();
         assert_eq!(value, 321);
 
         let poison = Poisoning::Poisoned(123);
-        let value = poison.assume_healthy();
+        let value = poison.unpoison();
         assert_eq!(value, 123);
     }
 
