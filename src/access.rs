@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex, RwLock, TryLockError};
 /// [Nomicon]: https://doc.rust-lang.org/nomicon/poisoning.html
 /// [`assert_healthy`]: Poisoning::assert_healthy
 /// [`unpoison`]: Poisoning::unpoison
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Poisoning<S> {
     /// The instance is not poisoned, program flow can continue as usual.
     Healthy(S),
@@ -31,12 +32,21 @@ pub enum Poisoning<S> {
 }
 
 impl<S> Poisoning<S> {
-    /// Returns the instance if it is not poisoned, panics if it is.
+    /// Returns the instance if it is not poisoned, panics if it is poisoned.
     #[track_caller]
     pub fn assert_healthy(self) -> S {
         match self {
             Self::Healthy(value) => value,
             Self::Poisoned(..) => panic!("Shared instance is poisoned"),
+        }
+    }
+
+    /// Returns the instance if it is poisoned, panics if it is not poisoned.
+    #[track_caller]
+    pub fn assert_poisoned(self) -> S {
+        match self {
+            Self::Poisoned(value) => value,
+            Self::Healthy(..) => panic!("Shared instance is not poisoned"),
         }
     }
 
@@ -69,6 +79,60 @@ impl<S> Poisoning<S> {
     /// [`Poisoned`]: Poisoning::Poisoned
     pub const fn is_poisoned(&self) -> bool {
         matches!(self, Self::Poisoned(..))
+    }
+
+    /// Returns `Some(&S)` if the value is not poisoned, returns `None` if it
+    /// is poisoned.
+    pub const fn as_healthy(&self) -> Option<&S> {
+        match self {
+            Self::Healthy(v) => Some(v),
+            Self::Poisoned(..) => None
+        }
+    }
+
+    /// Returns `Some(&S)` if the value is poisoned, returns `None` if it is 
+    /// not poisoned.
+    pub const fn as_poisoned(&self) -> Option<&S> {
+        match self {
+            Self::Poisoned(v) => Some(v),
+            Self::Healthy(..) => None
+        }
+    }
+
+    /// Returns `Some(&mut S)` if the value is not poisoned, returns `None` if
+    /// it is poisoned.
+    pub fn as_healthy_mut(&mut self) -> Option<&mut S> {
+        match self {
+            Self::Healthy(v) => Some(v),
+            Self::Poisoned(..) => None
+        }
+    }
+
+    /// Returns `Some(&mut S)` if the value is poisoned, returns `None` if it
+    /// is not poisoned.
+    pub fn as_poisoned_mut(&mut self) -> Option<&mut S> {
+        match self {
+            Self::Poisoned(v) => Some(v),
+            Self::Healthy(..) => None
+        }
+    }
+
+    /// Converts the value into `Some(S)` if it is not poisoned. Converterts
+    /// the value into `None` if it is poisoned.
+    pub fn into_healthy(self) -> Option<S> {
+        match self {
+            Self::Healthy(v) => Some(v),
+            Self::Poisoned(..) => None
+        }
+    }
+
+    /// Converts the value into `Some(S)` if it is poisoned. Converterts the
+    /// value into `None` if it is not poisoned.
+    pub fn into_poisoned(self) -> Option<S> {
+        match self {
+            Self::Poisoned(v) => Some(v),
+            Self::Healthy(..) => None
+        }
     }
 }
 
