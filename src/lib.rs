@@ -1,295 +1,207 @@
-//! Object dependency management for Rust.
+//! Manager for dependencies between objects for the Rust language.
 //!
-//! # Features
+//! # How to use
 //!
-//! * Automatic construction of objects which depend on other objects
-//! * Dependency Injection
-//! * Storage and management of Singletons
-//! * Compatible with multiple smart pointer types, locking mechanisms and
-//!   interiour mutability mechanisms
-//! * No setup step required
-//! * Works with any existing type without writing complicated wrapper types
-//! * Optional registration of custom constructors
-//!
-//! # Creating a Service Container
-//!
-//! To create a service container without any configuration, use the 
-//! [`ServiceContainer::new()`] method.
+//! The main type of this crate is the [`ServiceContainer`]. There are multiple
+//! ways to initialize the container. See the documentation on ServiceContainer
+//! for more information. The easiest way is with `new()`.
 //!
 //! ```rust
 //! use rscontainer::ServiceContainer;
+//! let mut container = ServiceContainer::new();
+//! ```
+//!
+//! To configure the container, such as overriding the default constructors,
+//! use the [`ContainerBuilder`].
+//!
+//! ```rust
+//! # use rscontainer::{IOwned, Resolver};
+//! # struct MyService(u32);
+//! # impl IOwned for MyService {
+//! #   type Instance = MyService;
+//! #   type Parameters = u32;
+//! #   type Error = ();
+//! #   fn construct(_: Resolver, val: u32) -> Result<MyService, ()> {
+//! #       Ok(MyService(val))
+//! #   }
+//! # }
+//! use rscontainer::ServiceContainer;
+//! let mut container = ServiceContainer::builder()
+//!     .with_owned_constructor::<MyService>(|_resolver, value| {
+//!         Ok(MyService(value))
+//!     })
+//!     .build();
+//! ```
+//!
+//! ## Resolving instances
+//!
+//! There are different kind of instances:
+//!
+//! * **Owned instances**: a fresh instance to be used in an owned scope. This
+//!   instance will not be stored in the service container, you will get a new
+//!   instance each time you resolve an owned instance. See
+//!   [`Resolver::owned()`].
+//! * **Shared instances**: an instance behind a smart pointer that is stored
+//!   in the service container. You will get the same instance each time you
+//!   resolve a shared service. See [`Resolver::shared()`] and [`Shared<T>`].
+//! * **Some instances**: an enum over owned and shared instances. Use this in a
+//!   type when you want the user of your type to decide what kind of instance
+//!   they want to supply. See [`Instance`], [`Resolver::shared_instance()`] and
+//!   [`Resolver::owned_instance()`].
+//!
+//! To resolve instances, you first need to acquire a [`Resolver`].
+//!
+//! ```rust
+//! # use rscontainer::ServiceContainer;
+//! # let mut container = ServiceContainer::new();
+//! let mut resolver = container.resolver();
+//! ```
+//!
+//! To get an instance, you use one of the resolver methods. To resolve an
+//! **owned instance**, use the [`Resolver::owned()`] method. An owned service
+//! can define parameters that need to be supplied to the `owned()` method.
+//!
+//! ```rust
+//! # use rscontainer::{IOwned, Resolver, ServiceContainer};
+//! # struct MyService(u32);
+//! # impl IOwned for MyService {
+//! #   type Instance = MyService;
+//! #   type Parameters = u32;
+//! #   type Error = ();
+//! #   fn construct(_: Resolver, val: u32) -> Result<MyService, ()> {
+//! #       Ok(MyService(val))
+//! #   }
+//! # }
+//! # fn main() -> Result<(), ()> {
+//! # let mut container = ServiceContainer::new();
+//! # let mut resolver = container.resolver();
+//! let mut owned_service = resolver.owned::<MyService>(120)?;
+//! # Ok(()) }
+//! ```
+//!
+//! To resolve a **shared instance**, use the [`Resolver::shared()`] method.
+//! The first time that this service is resolved, it will be contructed, stored
+//! in the container and the pointer is returned. Every other time the service
+//! is resolved that same pointer will be cloned and returned. Therefore it is
+//! not possible to supply parameters.
+//!
+//! ```rust
+//! # use rscontainer::{IShared, Resolver, ServiceContainer};
+//! # use std::sync::{Arc, Mutex};
+//! # struct MyService(u32);
+//! # impl IShared for MyService {
+//! #   type Pointer = Arc<Mutex<MyService>>;
+//! #   type Target = MyService;
+//! #   type Error = ();
+//! #   fn construct(_: Resolver) -> Result<Arc<Mutex<MyService>>, ()> {
+//! #       Ok(Arc::new(Mutex::new(MyService(543))))
+//! #   }
+//! # }
+//! # fn main() -> Result<(), ()> {
+//! # let mut container = ServiceContainer::new();
+//! # let mut resolver = container.resolver();
+//! let shared_service = resolver.shared::<MyService>()?;
+//! # Ok(()) }
+//! ```
+//!
+//! ## Working with instances
+//!
+//! An owned instance is just a normal, owned instance, therefore you can do
+//! with it whatever you want. But a shared instance is always behind a smart
+//! pointer and a locking or borrowing mechanism. To use the instance, you need
+//! to use one of the access methods: [`Shared::access()`],
+//! [`Shared::access_mut()`], [`Shared::try_access()`] and
+//! [`Shared::try_access_mut()`], which borrow or lock the instance for the
+//! lifetime of the supplied closure. These access methods take into account
+//! that the service may be poisoned. See [`Poisoning`] for more information.
+//!
+//! ```rust
+//! # use rscontainer::{IShared, Resolver, ServiceContainer};
+//! # use std::sync::{Arc, Mutex};
+//! # struct MyService(u32);
+//! # impl MyService { fn get_value(&self) -> u32 { self.0 } }
+//! # impl IShared for MyService {
+//! #   type Pointer = Arc<Mutex<MyService>>;
+//! #   type Target = MyService;
+//! #   type Error = ();
+//! #   fn construct(_: Resolver) -> Result<Arc<Mutex<MyService>>, ()> {
+//! #       Ok(Arc::new(Mutex::new(MyService(543))))
+//! #   }
+//! # }
+//! # fn main() -> Result<(), ()> {
+//! # let mut container = ServiceContainer::new();
+//! # let mut resolver = container.resolver();
+//! # let shared_service = resolver.shared::<MyService>()?;
+//! let value = shared_service.access(|service| {
+//!     let service = service.assert_healthy();
+//!     service.get_value()
+//! });
+//! # Ok(()) }
+//! ```
+//!
+//! ## Using a type as a service
+//!
+//! To be able to resolve a type through the service container, there needs to
+//! be an implementation of [`IShared`] and/or [`IOwned`] for it. These traits
+//! define a constructor method. For an owned service it will be called each
+//! time it is resolved. For a shared service it will only be called the first
+//! time.
+//!
+//! The constructors do not return `Self`, but rather an associated type
+//! defined on the traits. This makes it possible to resolve every type through
+//! the container without having to create a newtype wrapper.
+//!
+//! The constructors also receive a [`Resolver`], which can be used to
+//! recursively construct dependencies of the service. This is rscontainer's
+//! implementation of *dependency injection*.
+//!
+//! # Example
+//!
+//! ```rust
+//! use std::time::Instant;
+//! use std::rc::Rc;
+//! use std::cell::RefCell;
+//! use rscontainer::{IShared, Resolver, ServiceContainer};
+//!
+//! struct InstantService;
+//! impl IShared for InstantService {
+//!     type Pointer = Rc<RefCell<Instant>>;
+//!     type Target = Instant;
+//!     type Error = ();
+//!
+//!     fn construct(_: Resolver) -> Result<Self::Pointer, Self::Error> {
+//!         Ok(Rc::new(RefCell::new(Instant::now())))
+//!     }
+//! }
 //!
 //! fn main() {
 //!     let mut container = ServiceContainer::new();
+//!     let instant = container.resolver().shared::<InstantService>().unwrap();
+//!     instant.access(|instant| {
+//!         let instant = instant.assert_healthy();
+//!         println!("{:?}", instant);
+//!     });
 //! }
 //! ```
-//!
-//! To register custom constructors, use the [`ContainerBuilder`].
-//!
-//! ```rust
-//! use rscontainer::ContainerBuilder;
-//!
-//! fn main() {
-//!     let mut builder = ContainerBuilder::new();
-//!     
-//!     builder.constructors::<MyService>(
-//!         |container| {
-//!             MyService::new_instance(container)
-//!         },
-//!         |container| {
-//!             MyService::new_singleton(container)
-//!         }
-//!     );
-//!
-//!     let mut container = builder.build();
-//! }
-//! ```
-//!
-//! # Using the Service Container with static services
-//!
-//! **Singletons** are instances which are shared throughout your 
-//! application. Each time you resolve a singleton, you will get the same 
-//! instance. See [`Singleton<T>`] for more information.
-//!
-//! ```
-//! use rscontainer::{ServiceContainer, Singleton};
-//!
-//! let mut container = ServiceContainer::new();
-//!
-//! let singleton: Singleton<MyService> = container.resolve();
-//! singleton.write().set_something("something");
-//! let something = singleton.read().get_something();
-//! ```
-//!
-//! **Instances** are instances which are different each time you resolve 
-//! them from the container. See [`Instance<T>`] for more information.
-//!
-//! ```
-//! use rscontainer::{ServiceContainer, Instance};
-//!
-//! let mut container = ServiceContainer::new();
-//!
-//! let mut instance: Instance<MyService> = container.resolve();
-//! instance.set_something("something");
-//! let something = instance.get_something();
-//! ```
-//!
-//! [`Singleton<T>`] and [`Instance<T>`] do not carry a lifetime parameter,
-//! therefore they can be stored in structs and enums very easily.
-//!
-//! # Enabling a type to be used as a Service
-//!
-//! To enable a type to be resolved through the service container, you need to
-//! implement the [`IService`] trait on it. With a simple trick it's possible
-//! to use any existing type as a service. See the documentation of this trait
-//! for more information.
-//!
-//! [`ServiceContainer::new()`]: crate::ServiceContainer::new
-//! [`ContainerBuilder`]: crate::ContainerBuilder
-//! [`Singleton<T>`]: crate::Singleton
-//! [`Instance<T>`]: crate::Instance
-//! [`IService`]: crate::IService
 
+mod access;
 mod builder;
-mod helpers;
-mod static_services;
+mod container;
+mod getters;
+mod internal_helpers;
+mod pointers;
+mod resolver;
+mod service_traits;
 
-pub use crate::builder::ContainerBuilder;
-pub use crate::static_services::getters::{Instance, Singleton};
-pub use crate::static_services::service_traits::IService;
-pub use crate::static_services::pointers::{IPointer, IWritePointer, IReadPointer};
+pub use self::access::{Access, Poisoning};
+pub use self::builder::ContainerBuilder;
+pub use self::container::ServiceContainer;
+pub use self::getters::{Instance, Shared};
+pub use self::resolver::Resolver;
+pub use self::service_traits::{IOwned, IShared};
 
-use crate::helpers::{Constructor, Constructors, IResolve, SingletonPtr};
-use log::trace;
-use std::any::type_name;
-use std::any::TypeId;
-use std::collections::HashMap;
-use std::ptr::NonNull;
-
-//////////////////////////////////////////////////////////////////////////////
-// Main Service Container
-//////////////////////////////////////////////////////////////////////////////
-
-/// A container for services.
-///
-/// Manages dependencies between these services.
-pub struct ServiceContainer {
-    singletons: HashMap<TypeId, SingletonPtr>,
-    constructors: HashMap<TypeId, Constructors>,
-}
-
-impl ServiceContainer {
-    //////////////////////////////////////////////////////////////////////////
-    // Constructors
-    //////////////////////////////////////////////////////////////////////////
-
-    /// Creates a new, empty service container.
-    pub fn new() -> Self {
-        Self {
-            singletons: HashMap::new(),
-            constructors: HashMap::new(),
-        }
-    }
-
-    /// Creates a new service container that is already built.
-    pub(crate) fn new_built(
-        singletons: HashMap<TypeId, SingletonPtr>,
-        constructors: HashMap<TypeId, Constructors>,
-    ) -> Self {
-        Self {
-            singletons,
-            constructors,
-        }
-    }
-
-    /// Creates a new service container with the specified reserved capacity.
-    pub fn with_capacity(singletons: usize) -> Self {
-        Self {
-            singletons: HashMap::with_capacity(singletons),
-            constructors: HashMap::new(),
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////////
-    // Resolve Methods
-    //////////////////////////////////////////////////////////////////////////
-
-    /// Resolve an object from the service container.
-    ///
-    /// This method can be used to resolve a service in any form, be it
-    /// a singleton, instance, etc..
-    #[inline]
-    pub fn resolve<T>(&mut self) -> T
-    where
-        T: IResolve,
-    {
-        T::resolve(self)
-    }
-
-    /// Resolves or constructs a singleton.
-    pub fn resolve_singleton<T>(&mut self) -> Singleton<T>
-    where
-        T: IService + 'static,
-    {
-        trace!("Resolving singleton {}", type_name::<T>());
-        let key = TypeId::of::<T>();
-
-        // Check if we have a saved instance and return it.
-        if let Some(singleton) = self.singletons.get(&key) {
-            // We are sure that the raw pointer is `T`, because we saved the
-            // type id in the key. We clone the smart pointer and forget the 
-            // original one to increase the reference count.
-            let raw_ptr = singleton.ptr.as_ptr();
-            let smart_ptr = unsafe { T::Pointer::from_type_erased_raw(raw_ptr) };
-            let pointer = smart_ptr.clone();
-            std::mem::forget(smart_ptr);
-            return Singleton { pointer };
-        }
-
-        // If there's no saved instance, check if there is
-        // a custom constructor registered.
-        let ctors = match self.constructors.is_empty() {
-            true => None,
-            false => self.constructors.get(&key)
-        };
-
-        // If there is a custom constructor, call it. If there is none,
-        // call the default constructor.
-        let pointer = if let Some(ctors) = ctors {
-            let ctor: Constructor<T::Pointer> = unsafe { std::mem::transmute(ctors.singleton) };
-            ctor(self)
-        } else {
-            T::construct_singleton(self)
-        };
-
-        // Store a clone of the singleton in the container.
-        let raw_ptr = unsafe { T::Pointer::into_type_erased_raw(pointer.clone()) };
-        let nonnull_ptr = unsafe { NonNull::new_unchecked(raw_ptr as *mut ()) };
-        let singleton_ptr = SingletonPtr {
-            ptr: nonnull_ptr,
-            dtor: T::Pointer::drop_type_erased,
-        };
-        self.singletons.insert(key, singleton_ptr);
-
-        Singleton { pointer }
-    }
-
-    /// Constructs an instance through the service container.
-    pub fn resolve_instance<T>(&mut self) -> Instance<T>
-    where
-        T: IService + 'static,
-    {
-        trace!("Resolving instance {}", type_name::<T>());
-        let key = TypeId::of::<T>();
-
-        // Check if there's a custom constructor registered.
-        let ctors = match self.constructors.is_empty() {
-            true => None,
-            false => self.constructors.get(&key)
-        };
-
-        // If there is a custom constructor, call it. If there is none,
-        // call the default constructor.
-        let instance = if let Some(ctors) = ctors {
-            let ctor: Constructor<T::Instance> = unsafe { std::mem::transmute(ctors.instance) };
-            ctor(self)
-        } else {
-            T::construct(self)
-        };
-
-        Instance { instance }
-    }
-
-    //////////////////////////////////////////////////////////////////////////
-    // Meta Data Getters
-    //////////////////////////////////////////////////////////////////////////
-
-    /// Returns the number of static singletons that are currently residing in
-    /// the service container.
-    pub fn num_singletons(&self) -> usize {
-        self.singletons.len()
-    }
-
-    /// Returns true if an instance of the supplied TypeId is currently
-    /// residing in the container as a singleton.
-    pub fn constains_type(&self, key: TypeId) -> bool {
-        self.singletons.contains_key(&key)
-    }
-
-    /// Returns true if an instance of the supplied singleton is currently
-    /// residing in the container.
-    pub fn contains<T>(&self) -> bool
-    where
-        T: IService + 'static,
-    {
-        let key = TypeId::of::<T>();
-        self.constains_type(key)
-    }
-
-    //////////////////////////////////////////////////////////////////////////
-    // Modifiers
-    //////////////////////////////////////////////////////////////////////////
-
-    /// Removes a singleton from the container.
-    ///
-    /// This does not invalidate any previously resolved instances of the
-    /// singleton.
-    ///
-    /// If the singleton existed, it is returned. Otherwise `None` is returned.
-    pub fn remove<T>(&mut self) -> Option<Singleton<T>>
-    where
-        T: IService + 'static,
-    {
-        let key = TypeId::of::<T>();
-        if let Some(singleton) = self.singletons.remove(&key) {
-            // We are sure that the raw pointer is `T`, because we saved the
-            // type id in the key. Here we don't clone the smart pointer but
-            // return the original one.
-            let raw_ptr = singleton.ptr.as_ptr();
-            let pointer = unsafe { T::Pointer::from_type_erased_raw(raw_ptr) };
-            Some(Singleton { pointer })
-        } else {
-            None
-        }
-    }
+/// Types for extending the functionality of rscontainer.
+pub mod internals {
+    pub use crate::access::{IAccess, IAccessMut};
+    pub use crate::pointers::ISharedPointer;
 }

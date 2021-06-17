@@ -1,10 +1,14 @@
 [package]
 name = "rscontainer"
 version = "0.1.0"
-authors = ["Yves Dumoulin <yvd-dev@outlook.com>"]
+authors = ["Yves D. <yvd-dev@outlook.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT OR Apache-2.0"
+description = "Manages dependencies between objects."
+keywords = ["singleton", "resolving", "dependencies", "services", "manager", "data", "container"]
+homepage = "https://github.com/yvesdum/rscontainer"
+repository = "https://github.com/yvesdum/rscontainer"
+readme = "README.md"
 
 [dependencies]
-log = "*"
+fnv = "1.0.7"
