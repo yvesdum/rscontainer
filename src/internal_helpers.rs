@@ -1,7 +1,7 @@
 //! Internal storage helpers.
 
 use crate::pointers::ISharedPointer;
-use crate::service_traits::{ILocal, IShared};
+use crate::service_traits::{IOwned, IShared};
 use crate::Resolver;
 use std::fmt;
 use std::ptr::NonNull;
@@ -33,11 +33,11 @@ impl SharedPtr {
 pub(crate) type SharedCtor<S> =
     fn(Resolver) -> Result<<S as IShared>::Pointer, <S as IShared>::Error>;
 
-/// A custom constructor for a local instance.
-pub(crate) type LocalCtor<S> = fn(
+/// A custom constructor for an owned instance.
+pub(crate) type OwnedCtor<S> = fn(
     Resolver,
-    <S as ILocal>::Parameters,
-) -> Result<<S as ILocal>::Instance, <S as ILocal>::Error>;
+    <S as IOwned>::Parameters,
+) -> Result<<S as IOwned>::Instance, <S as IOwned>::Error>;
 
 /// A service in the container that is type erased.
 #[derive(Default)]
@@ -46,8 +46,8 @@ pub(crate) struct TypeErasedService {
     pub shared_ptr: Option<SharedPtr>,
     /// Custom constructor for a shared instance.
     pub shared_ctor: Option<SharedCtor<()>>,
-    /// Custom constructor for a local instance.
-    pub local_ctor: Option<LocalCtor<()>>,
+    /// Custom constructor for an owned instance.
+    pub owned_ctor: Option<OwnedCtor<()>>,
 }
 
 impl fmt::Debug for TypeErasedService {
@@ -55,7 +55,7 @@ impl fmt::Debug for TypeErasedService {
         f.debug_struct("TypeErasedService")
             .field("shared_ptr", &self.shared_ptr)
             .field("shared_ctor", &self.shared_ctor.is_some())
-            .field("local_ctor", &self.local_ctor.is_some())
+            .field("owned_ctor", &self.owned_ctor.is_some())
             .finish()
     }
 }

@@ -44,9 +44,9 @@ pub trait IShared {
     fn resolved(_this: &mut Self::Pointer, _ctn: Resolver) {}
 }
 
-/// A type that can be used as a local service.
-pub trait ILocal {
-    /// The type of the local service.
+/// A type that can be used as an owned service.
+pub trait IOwned {
+    /// The type of the owned service.
     type Instance;
 
     /// Optional parameters for the `construct` method.
@@ -77,7 +77,7 @@ impl IShared for () {
     }
 }
 
-impl ILocal for () {
+impl IOwned for () {
     type Instance = ();
     type Parameters = ();
     type Error = ();

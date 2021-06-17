@@ -1,8 +1,8 @@
 //! Container version 2.0
 
-use crate::internal_helpers::{LocalCtor, SharedCtor, SharedPtr, TypeErasedService};
+use crate::internal_helpers::{OwnedCtor, SharedCtor, SharedPtr, TypeErasedService};
 use crate::pointers::ISharedPointer;
-use crate::service_traits::{ILocal, IShared};
+use crate::service_traits::{IOwned, IShared};
 use crate::ContainerBuilder;
 use crate::Resolver;
 use fnv::FnvHashMap;
@@ -118,28 +118,28 @@ impl ServiceContainer {
         Ok(instance)
     }
 
-    /// Resolves a local instance.
-    pub(crate) fn resolve_local<S: 'static + ?Sized + ILocal>(
+    /// Resolves an owned instance.
+    pub(crate) fn resolve_owned<S: 'static + ?Sized + IOwned>(
         &mut self,
         params: S::Parameters,
     ) -> Result<S::Instance, S::Error> {
-        let mut local = match self.services.get(&TypeId::of::<S>()) {
+        let mut owned = match self.services.get(&TypeId::of::<S>()) {
             // There is a custom constructor registered.
             Some(TypeErasedService {
-                local_ctor: Some(ctor),
+                owned_ctor: Some(ctor),
                 ..
             }) => unsafe {
                 // SAFETY: because the TypeId is the key, we're certain
                 // that we're casting to the right type.
-                let ctor: LocalCtor<S> = std::mem::transmute(*ctor);
+                let ctor: OwnedCtor<S> = std::mem::transmute(*ctor);
                 ctor(self.resolver(), params)?
             },
 
             // There is no custom constructor, so use the default one.
             _ => S::construct(self.resolver(), params)?,
         };
-        S::resolved(&mut local, self.resolver());
-        Ok(local)
+        S::resolved(&mut owned, self.resolver());
+        Ok(owned)
     }
 }
 
@@ -164,7 +164,7 @@ mod tests {
         }
     }
 
-    impl ILocal for u32 {
+    impl IOwned for u32 {
         type Instance = u32;
         type Parameters = ();
         type Error = ();
@@ -186,7 +186,7 @@ mod tests {
         }
     }
 
-    impl ILocal for Failing {
+    impl IOwned for Failing {
         type Instance = Failing;
         type Parameters = ();
         type Error = &'static str;
@@ -318,47 +318,47 @@ mod tests {
     }
 
     #[test]
-    fn resolve_local() {
+    fn resolve_owned() {
         let mut ctn = ServiceContainer::new();
-        let instance = ctn.resolver().local::<u32>(()).unwrap();
+        let instance = ctn.resolver().owned::<u32>(()).unwrap();
         assert_eq!(instance, 2468);
     }
 
     #[test]
-    fn resolve_local_custom_constructor() {
+    fn resolve_owned_custom_constructor() {
         let mut ctn = ServiceContainer::builder()
-            .with_local_constructor::<u32>(|_, _| Ok(1357))
+            .with_owned_constructor::<u32>(|_, _| Ok(1357))
             .build();
 
-        let instance = ctn.resolver().local::<u32>(()).unwrap();
+        let instance = ctn.resolver().owned::<u32>(()).unwrap();
         assert_eq!(instance, 1357);
     }
 
     #[test]
-    fn resolve_local_custom_constructor_twice() {
+    fn resolve_owned_custom_constructor_twice() {
         let mut ctn = ServiceContainer::builder()
-            .with_local_constructor::<u32>(|_, _| Ok(1357))
+            .with_owned_constructor::<u32>(|_, _| Ok(1357))
             .build();
 
-        let instance = ctn.resolver().local::<u32>(()).unwrap();
-        let instance_2 = ctn.resolver().local::<u32>(()).unwrap();
+        let instance = ctn.resolver().owned::<u32>(()).unwrap();
+        let instance_2 = ctn.resolver().owned::<u32>(()).unwrap();
         assert_eq!(instance, instance_2);
     }
 
     #[test]
-    fn resolve_local_failing() {
+    fn resolve_owned_failing() {
         let mut ctn = ServiceContainer::new();
-        let result = ctn.resolver().local::<Failing>(());
+        let result = ctn.resolver().owned::<Failing>(());
         assert!(matches!(result, Err("error456")));
     }
 
     #[test]
-    fn resolve_local_custom_failing() {
+    fn resolve_owned_custom_failing() {
         let mut ctn = ServiceContainer::builder()
-            .with_local_constructor::<u32>(|_, _| Err(()))
+            .with_owned_constructor::<u32>(|_, _| Err(()))
             .build();
 
-        let result = ctn.resolver().local::<u32>(());
+        let result = ctn.resolver().owned::<u32>(());
         assert!(matches!(result, Err(())));
     }
 }

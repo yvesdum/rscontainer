@@ -2,8 +2,8 @@
 
 use crate::container::ServiceContainer;
 use crate::getters::Shared;
-use crate::internal_helpers::{LocalCtor, SharedCtor, SharedPtr, TypeErasedService};
-use crate::service_traits::{ILocal, IShared};
+use crate::internal_helpers::{OwnedCtor, SharedCtor, SharedPtr, TypeErasedService};
+use crate::service_traits::{IOwned, IShared};
 use fnv::FnvHashMap;
 use std::any::TypeId;
 
@@ -55,24 +55,24 @@ impl ContainerBuilder {
         self
     }
 
-    /// Sets a custom constructor for a local instance.
-    pub fn with_local_constructor<S: 'static + ?Sized + ILocal>(
+    /// Sets a custom constructor for an owned instance.
+    pub fn with_owned_constructor<S: 'static + ?Sized + IOwned>(
         mut self,
-        ctor: LocalCtor<S>,
+        ctor: OwnedCtor<S>,
     ) -> Self {
-        self.entry(TypeId::of::<S>()).local_ctor = Some(unsafe { std::mem::transmute(ctor) });
+        self.entry(TypeId::of::<S>()).owned_ctor = Some(unsafe { std::mem::transmute(ctor) });
         self
     }
 
-    /// Sets custom contructors for a local and shared intance.
-    pub fn with_constructors<S: 'static + ?Sized + ILocal + IShared>(
+    /// Sets custom contructors for an owned and shared intance.
+    pub fn with_constructors<S: 'static + ?Sized + IOwned + IShared>(
         mut self,
-        local: LocalCtor<S>,
+        owned: OwnedCtor<S>,
         shared: SharedCtor<S>,
     ) -> Self {
         let mut entry = self.entry(TypeId::of::<S>());
         entry.shared_ctor = Some(unsafe { std::mem::transmute(shared) });
-        entry.local_ctor = Some(unsafe { std::mem::transmute(local) });
+        entry.owned_ctor = Some(unsafe { std::mem::transmute(owned) });
         self
     }
 
@@ -118,7 +118,7 @@ mod tests {
 
         assert!(entry.shared_ptr.is_none());
         assert!(entry.shared_ctor.is_none());
-        assert!(entry.local_ctor.is_none());
+        assert!(entry.owned_ctor.is_none());
     }
 
     #[test]
@@ -160,14 +160,14 @@ mod tests {
     }
 
     #[test]
-    fn with_local_constructor() {
+    fn with_owned_constructor() {
         let mut ctn = ContainerBuilder::new();
 
         fn ctor(_: Resolver, _: ()) -> Result<u32, ()> {
             Ok(456)
         }
 
-        ctn = ctn.with_local_constructor::<u32>(ctor);
+        ctn = ctn.with_owned_constructor::<u32>(ctor);
 
         assert_eq!(ctn.inner().len(), 1);
 
@@ -175,7 +175,7 @@ mod tests {
 
         assert_eq!(
             ctor as *const (),
-            *entry.local_ctor.as_ref().unwrap() as *const ()
+            *entry.owned_ctor.as_ref().unwrap() as *const ()
         );
     }
 
@@ -187,11 +187,11 @@ mod tests {
             Ok(Rc::new(Access::new(456)))
         }
 
-        fn local_ctor(_: Resolver, _: ()) -> Result<u32, ()> {
+        fn owned_ctor(_: Resolver, _: ()) -> Result<u32, ()> {
             Ok(456)
         }
 
-        ctn = ctn.with_constructors::<u32>(local_ctor, shared_ctor);
+        ctn = ctn.with_constructors::<u32>(owned_ctor, shared_ctor);
 
         assert_eq!(ctn.inner().len(), 1);
 
@@ -203,8 +203,8 @@ mod tests {
         );
 
         assert_eq!(
-            local_ctor as *const (),
-            *entry.local_ctor.as_ref().unwrap() as *const ()
+            owned_ctor as *const (),
+            *entry.owned_ctor.as_ref().unwrap() as *const ()
         );
     }
 }

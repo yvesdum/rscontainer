@@ -12,12 +12,25 @@
 //! ```
 //!
 //! To configure the container, such as overriding the default constructors,
-//! use the [`ContainerBuilder`]. 
+//! use the [`ContainerBuilder`].
 //!
 //! ```rust
+//! # use rscontainer::{IOwned, Resolver};
+//! # struct MyService(u32);
+//! # impl IOwned for MyService {
+//! #   type Instance = MyService;
+//! #   type Parameters = u32;
+//! #   type Error = ();
+//! #   fn construct(_: Resolver, val: u32) -> Result<MyService, ()> {
+//! #       Ok(MyService(val))
+//! #   }
+//! # }
+//!
 //! use rscontainer::ServiceContainer;
 //! let mut container = ServiceContainer::builder()
-//!     .with_local_constructor::<u32>(|_resolver, params| Ok(params.value))
+//!     .with_owned_constructor::<MyService>(|_resolver, value| {
+//!         Ok(MyService(value))
+//!     })
 //!     .build();
 //! ```
 //!
@@ -25,10 +38,10 @@
 //!
 //! There are different kind of instances:
 //!
-//! * **Local instances**: a fresh instance to be used in a local scope. This
+//! * **Owned instances**: a fresh instance to be used in an owned scope. This
 //!   instance will not be stored in the service container, you will get a new
-//!   instance each time you resolve a local instance. See 
-//!   [`Resolver::local()`].
+//!   instance each time you resolve an owned instance. See
+//!   [`Resolver::owned()`].
 //! * **Shared instances**: an instance behind a smart pointer that is stored
 //!   in the service container. You will get the same instance each time you
 //!   resolve a shared service. See [`Resolver::shared()`] and [`Shared<T>`].
@@ -36,16 +49,31 @@
 //! To resolve instances, you first need to acquire a [`Resolver`].
 //!
 //! ```rust
+//! # use rscontainer::ServiceContainer;
+//! # let mut container = ServiceContainer::new();
 //! let mut resolver = container.resolver();
 //! ```
 //!
-//! To get an instance, you use one of the resolver methods. To resolve a 
-//! **local instance**, use the [`Resolver::local()`] method. A local service 
-//! can define parameters that need to be supplied to the `local()` method.
+//! To get an instance, you use one of the resolver methods. To resolve an
+//! **owned instance**, use the [`Resolver::owned()`] method. An owned service
+//! can define parameters that need to be supplied to the `owned()` method.
 //!
 //! ```rust
-//! let params = (100, "hi!");
-//! let mut local_service = resolver.resolve::<LocalService>(params).unwrap();
+//! # use rscontainer::{IOwned, Resolver, ServiceContainer};
+//! # struct MyService(u32);
+//! # impl IOwned for MyService {
+//! #   type Instance = MyService;
+//! #   type Parameters = u32;
+//! #   type Error = ();
+//! #   fn construct(_: Resolver, val: u32) -> Result<MyService, ()> {
+//! #       Ok(MyService(val))
+//! #   }
+//! # }
+//! # fn main() -> Result<(), ()> {
+//! # let mut container = ServiceContainer::new();
+//! # let mut resolver = container.resolver();
+//! let mut owned_service = resolver.owned::<MyService>(120)?;
+//! # Ok(()) }
 //! ```
 //!
 //! To resolve a **shared instance**, use the [`Resolver::shared()`] method.
@@ -55,32 +83,64 @@
 //! not possible to supply parameters.
 //!
 //! ```rust
-//! let mut shared_service = resolver.shared::<SharedService>().unwrap();
+//! # use rscontainer::{IShared, Resolver, ServiceContainer};
+//! # use std::sync::{Arc, Mutex};
+//! # struct MyService(u32);
+//! # impl IShared for MyService {
+//! #   type Pointer = Arc<Mutex<MyService>>;
+//! #   type Target = MyService;
+//! #   type Error = ();
+//! #   fn construct(_: Resolver) -> Result<Arc<Mutex<MyService>>, ()> {
+//! #       Ok(Arc::new(Mutex::new(MyService(543))))
+//! #   }
+//! # }
+//! # fn main() -> Result<(), ()> {
+//! # let mut container = ServiceContainer::new();
+//! # let mut resolver = container.resolver();
+//! let shared_service = resolver.shared::<MyService>()?;
+//! # Ok(()) }
 //! ```
 //!
 //! ## Working with instances
-//! 
-//! A local instance is just a normal, owned instance, therefore you can do
+//!
+//! An owned instance is just a normal, owned instance, therefore you can do
 //! with it whatever you want. But a shared instance is always behind a smart
 //! pointer and a locking or borrowing mechanism. To use the instance, you need
-//! to use one of the access methods: [`Shared::access()`], 
-//! [`Shared::access_mut()`], [`Shared::try_access()`] and 
+//! to use one of the access methods: [`Shared::access()`],
+//! [`Shared::access_mut()`], [`Shared::try_access()`] and
 //! [`Shared::try_access_mut()`], which borrow or lock the instance for the
 //! lifetime of the supplied closure. These access methods take into account
 //! that the service may be poisoned. See [`Poisoning`] for more information.
 //!
 //! ```rust
+//! # use rscontainer::{IShared, Resolver, ServiceContainer};
+//! # use std::sync::{Arc, Mutex};
+//! # struct MyService(u32);
+//! # impl MyService { fn get_value(&self) -> u32 { self.0 } }
+//! # impl IShared for MyService {
+//! #   type Pointer = Arc<Mutex<MyService>>;
+//! #   type Target = MyService;
+//! #   type Error = ();
+//! #   fn construct(_: Resolver) -> Result<Arc<Mutex<MyService>>, ()> {
+//! #       Ok(Arc::new(Mutex::new(MyService(543))))
+//! #   }
+//! # }
+//! # fn main() -> Result<(), ()> {
+//! # let mut container = ServiceContainer::new();
+//! # let mut resolver = container.resolver();
+//! # let shared_service = resolver.shared::<MyService>()?;
 //! let value = shared_service.access(|service| {
 //!     let service = service.assert_healthy();
 //!     service.get_value()
 //! });
+//! # Ok(()) }
 //! ```
 //!
 //! ## Using a type as a service
 //!
 //! To be able to resolve a type through the service container, there needs to
-//! be an implementation of [`IShared`] and/or [`ILocal`] for it. These traits
-//! define a constructor method. For a local service it will be called each
+//! be an implementation of [`IShared`] and/or [`IOwned`] for it. These traits
+//! define a constructor method. For an owned service it will be called each
 //! time it is resolved. For a shared service it will only be called the first
 //! time.
 //!
@@ -88,7 +148,7 @@
 //! defined on the traits. This makes it possible to resolve every type through
 //! the container without having to create a newtype wrapper.
 //!
-//! The constructors also receive a [`Resolver`], which can be used to 
+//! The constructors also receive a [`Resolver`], which can be used to
 //! recursively construct dependencies of the service. This is rscontainer's
 //! implementation of *dependency injection*.
 //!
@@ -110,7 +170,7 @@
 //!         Ok(Rc::new(RefCell::new(Instant::now())))
 //!     }
 //! }
-//! 
+//!
 //! fn main() {
 //!     let mut container = ServiceContainer::new();
 //!     let instant = container.resolver().shared::<InstantService>().unwrap();
@@ -135,7 +195,7 @@ pub use self::builder::ContainerBuilder;
 pub use self::container::ServiceContainer;
 pub use self::getters::{Instance, Shared};
 pub use self::resolver::Resolver;
-pub use self::service_traits::{ILocal, IShared};
+pub use self::service_traits::{IOwned, IShared};
 
 /// Types for extending the functionality of rscontainer.
 pub mod internals {

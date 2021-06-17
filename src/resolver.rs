@@ -1,6 +1,6 @@
 //! Resolver for the service container.
 
-use crate::{ILocal, IShared, Instance, ServiceContainer, Shared};
+use crate::{IOwned, IShared, Instance, ServiceContainer, Shared};
 
 /// Used to resolve services from the service container.
 ///
@@ -37,16 +37,16 @@ impl<'ctn> Resolver<'ctn> {
         }
     }
 
-    /// Resolves a local instance.
-    pub fn local<S: ?Sized + ILocal + 'static>(
+    /// Resolves an owned instance.
+    pub fn owned<S: ?Sized + IOwned + 'static>(
         &mut self,
         params: S::Parameters,
     ) -> Result<S::Instance, S::Error> {
-        self.ctn.resolve_local::<S>(params)
+        self.ctn.resolve_owned::<S>(params)
     }
 
     /// Resolves an [`Instance::Shared`].
-    pub fn shared_instance<S: ?Sized + IShared + ILocal + 'static>(
+    pub fn shared_instance<S: ?Sized + IShared + IOwned + 'static>(
         &mut self,
     ) -> Result<Instance<S>, <S as IShared>::Error> {
         match self.ctn.resolve_shared::<S>() {
@@ -55,13 +55,13 @@ impl<'ctn> Resolver<'ctn> {
         }
     }
 
-    /// Resolves an [`Instance::Local`].
-    pub fn local_instance<S: ?Sized + IShared + ILocal + 'static>(
+    /// Resolves an [`Instance::Owned`].
+    pub fn owned_instance<S: ?Sized + IShared + IOwned + 'static>(
         &mut self,
         params: S::Parameters,
-    ) -> Result<Instance<S>, <S as ILocal>::Error> {
-        match self.ctn.resolve_local::<S>(params) {
-            Ok(l) => Ok(Instance::from_local(l)),
+    ) -> Result<Instance<S>, <S as IOwned>::Error> {
+        match self.ctn.resolve_owned::<S>(params) {
+            Ok(l) => Ok(Instance::from_owned(l)),
             Err(e) => Err(e)
         }
     }

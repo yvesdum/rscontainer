@@ -2,7 +2,7 @@
 
 use super::access::{IAccess, IAccessMut, Poisoning};
 use super::pointers::ISharedPointer;
-use super::service_traits::{ILocal, IShared};
+use super::service_traits::{IOwned, IShared};
 use std::fmt;
 use std::ops::Deref;
 
@@ -124,24 +124,24 @@ where
 // Any Kind Instance
 ///////////////////////////////////////////////////////////////////////////////
 
-/// Some instance of a service, either a shared instance or local instance.
+/// Some instance of a service, either a shared instance or owned instance.
 ///
 /// Use this as a field, when you want the user to decide whether they want to
-/// supply a shared or local instance.
-pub enum Instance<S: ?Sized + IShared + ILocal> {
+/// supply a shared or owned instance.
+pub enum Instance<S: ?Sized + IShared + IOwned> {
     Shared(S::Pointer),
-    Local(S::Instance),
+    Owned(S::Instance),
 }
 
-impl<S: ?Sized + IShared + ILocal> Instance<S> {
+impl<S: ?Sized + IShared + IOwned> Instance<S> {
     /// Creates an instance from a shared instance pointer.
     pub fn from_shared(inner: S::Pointer) -> Self {
         Self::Shared(inner)
     }
 
-    /// Creates an instance from a local instance.
-    pub fn from_local(inner: S::Instance) -> Self {
-        Self::Local(inner)
+    /// Creates an instance from an owned instance.
+    pub fn from_owned(inner: S::Instance) -> Self {
+        Self::Owned(inner)
     }
 
     /// Get access to the shared instance through a closure.
@@ -152,7 +152,7 @@ impl<S: ?Sized + IShared + ILocal> Instance<S> {
     {
         match self {
             Self::Shared(s) => s.access(accessor),
-            Self::Local(l) => accessor(Poisoning::Healthy(l)),
+            Self::Owned(l) => accessor(Poisoning::Healthy(l)),
         }
     }
 
@@ -164,7 +164,7 @@ impl<S: ?Sized + IShared + ILocal> Instance<S> {
     {
         match self {
             Self::Shared(s) => s.try_access(accessor),
-            Self::Local(l) => Some(accessor(Poisoning::Healthy(l))),
+            Self::Owned(l) => Some(accessor(Poisoning::Healthy(l))),
         }
     }
 
@@ -176,7 +176,7 @@ impl<S: ?Sized + IShared + ILocal> Instance<S> {
     {
         match self {
             Self::Shared(s) => s.access_mut(accessor),
-            Self::Local(l) => accessor(Poisoning::Healthy(l)),
+            Self::Owned(l) => accessor(Poisoning::Healthy(l)),
         }
     }
 
@@ -188,7 +188,7 @@ impl<S: ?Sized + IShared + ILocal> Instance<S> {
     {
         match self {
             Self::Shared(s) => s.try_access_mut(accessor),
-            Self::Local(l) => Some(accessor(Poisoning::Healthy(l))),
+            Self::Owned(l) => Some(accessor(Poisoning::Healthy(l))),
         }
     }
 }
