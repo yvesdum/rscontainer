@@ -25,7 +25,6 @@
 //! #       Ok(MyService(val))
 //! #   }
 //! # }
-//!
 //! use rscontainer::ServiceContainer;
 //! let mut container = ServiceContainer::builder()
 //!     .with_owned_constructor::<MyService>(|_resolver, value| {
@@ -45,6 +44,10 @@
 //! * **Shared instances**: an instance behind a smart pointer that is stored
 //!   in the service container. You will get the same instance each time you
 //!   resolve a shared service. See [`Resolver::shared()`] and [`Shared<T>`].
+//! * **Some instances**: an enum over owned and shared instances. Use this in a
+//!   type when you want the user of your type to decide what kind of instance
+//!   they want to supply. See [`Instance`], [`Resolver::shared_instance()`] and
+//!   [`Resolver::owned_instance()`].
 //!
 //! To resolve instances, you first need to acquire a [`Resolver`].
 //!

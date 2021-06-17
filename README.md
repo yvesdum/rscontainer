@@ -17,6 +17,9 @@ There are different kind of instances:
   * **Shared instances**: an instance behind a smart pointer that is stored
     in the service container. You will get the same instance each time you
     resolve a shared service.
+  * **Some instances**: an enum over owned and shared instances. Use this in a
+    type when you want the user of your type to decide what kind of instance
+    they want to supply.
 
 ## How to use
 
@@ -26,17 +29,17 @@ Resolving a owned instance:
 use rscontainer::ServiceContainer;
 
 let mut container = ServiceContainer::new();
-let mut foo = container.resolver().owned::<SomeService>(()).unwrap();
+let mut foo = container.resolver().owned::<SomeService>(())?;
 foo.do_something();
 ```
 
 Resolving a shared instance (singleton):
 
 ```Rust
-use rscontainer::ServiceContainer;
+use rscontainer::{ServiceContainer, Shared};
 
 let mut container = ServiceContainer::new();
-let foo: Shared<SomeService> = container.resolver().shared().unwrap();
+let foo: Shared<SomeService> = container.resolver().shared()?;
 
 foo.access_mut(|foo| {
     let foo = foo.assert_healthy();
