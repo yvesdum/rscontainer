@@ -45,7 +45,7 @@ impl ServiceContainer {
     }
 
     /// Creates a ContainerBuilder with the specified capacity.
-    pub fn builder_with_capcity(capacity: usize) -> ContainerBuilder {
+    pub fn builder_with_capacity(capacity: usize) -> ContainerBuilder {
         ContainerBuilder::with_capacity(capacity)
     }
 
