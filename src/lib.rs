@@ -205,3 +205,78 @@ pub mod internals {
     pub use crate::access::{IAccess, IAccessMut};
     pub use crate::pointers::ISharedPointer;
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Tests for README.md
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn readme_example() {
+        use super::{IOwned, IShared, Resolver, ServiceContainer, Shared};
+        use std::sync::{Arc, Mutex};
+        use std::time::Instant;
+
+        enum LogService {}
+
+        impl IOwned for LogService {
+            type Instance = Vec<Instant>;
+            type Parameters = ();
+            type Error = ();
+
+            fn construct(_: Resolver, _: Self::Parameters) -> Result<Self::Instance, Self::Error> {
+                Ok(Vec::new())
+            }
+        }
+
+        struct Counter {
+            value: u32,
+            log: Vec<Instant>,
+        }
+
+        impl Counter {
+            fn increase(&mut self) {
+                self.value += 1;
+                self.log.push(Instant::now());
+            }
+        }
+
+        impl IShared for Counter {
+            type Pointer = Arc<Mutex<Counter>>;
+            type Target = Counter;
+            type Error = ();
+
+            fn construct(mut r: Resolver) -> Result<Self::Pointer, Self::Error> {
+                Ok(Arc::new(Mutex::new(Counter {
+                    value: 0,
+                    log: r.owned::<LogService>(())?,
+                })))
+            }
+        }
+
+        fn main() -> Result<(), ()> {
+            let mut container = ServiceContainer::new();
+
+            // Initialize the counter service and recursively intialize an owned
+            // instance of the log service and inject it in the counter service.
+            let counter: Shared<Counter> = container.resolver().shared()?;
+
+            counter.access_mut(|instance| {
+                instance.assert_healthy().increase();
+            });
+
+            let timestamps = counter.access(|instance| {
+                let counter = instance.assert_healthy();
+                assert_eq!(counter.value, 1);
+                counter.log.clone()
+            });
+
+            println!("Timestamps: {:?}", timestamps);
+
+            Ok(())
+        }
+
+        main().unwrap();
+    }
+}
